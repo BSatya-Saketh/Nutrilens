@@ -7,10 +7,14 @@ import {
   MarkerInput,
   UserProfile,
 } from '../types';
+import { needsReview } from '../lib/review';
 
 export type Step = 'upload' | 'verify' | 'profile' | 'results';
 
-const DEFAULT_PROFILE: UserProfile = { age: 25, gender: 'female', diet_type: 'veg', allergens: [] };
+const DEFAULT_PROFILE: UserProfile = {
+  age: 25, gender: 'female', diet_type: 'veg', allergens: [], height_cm: null, weight_kg: null, activity: 'none',
+  region: '', meats: [], custom_allergies: [], existing_diet: '',
+};
 
 /**
  * The analyzer workflow state. It lives at the app root so an in-progress analysis survives
@@ -32,7 +36,8 @@ export function useAnalyzer() {
     setSanitizedPreview(data.sanitized_preview);
     setExtractionWarnings(data.warnings || []);
     setExtractedMarkers(data.extracted_biomarkers);
-    setStep('verify');
+    // Clean results go straight on; the review step only appears when something needs the person's attention.
+    setStep(needsReview(data.extracted_biomarkers) ? 'verify' : 'profile');
   };
 
   const handleRunAnalysis = async (validatedProfile: UserProfile) => {
@@ -62,11 +67,11 @@ export function useAnalyzer() {
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (dietPlan?: FullAnalysisResponse['diet_plan']) => {
     if (!analysisResult) return;
     setIsExportingPdf(true);
     try {
-      await downloadPlanPdf(analysisResult);
+      await downloadPlanPdf(dietPlan ? { ...analysisResult, diet_plan: dietPlan } : analysisResult);
     } catch (err) {
       setError('PDF generation failed: ' + (err as Error).message);
     } finally {

@@ -1,6 +1,7 @@
 import React from 'react';
-import { ArrowLeft, ArrowRight, Eye, EyeOff, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Eye, EyeOff, Info, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { DetectedBiomarker } from '../types';
+import { isBlocking, reviewReason } from '../lib/review';
 import { Badge, Button, Card, PageHeader, cx } from './ui';
 
 interface VerificationTableProps {
@@ -13,12 +14,67 @@ interface VerificationTableProps {
 }
 
 const AVAILABLE_BIOMARKERS = [
-  { key: 'vitamin_d', name: 'Vitamin D (25-OH)', canonicalUnit: 'ng/mL' },
-  { key: 'vitamin_b12', name: 'Vitamin B12 (Cobalamin)', canonicalUnit: 'pg/mL' },
-  { key: 'folate', name: 'Folate (Vitamin B9)', canonicalUnit: 'ng/mL' },
-  { key: 'ferritin', name: 'Serum Ferritin', canonicalUnit: 'ng/mL' },
-  { key: 'hemoglobin', name: 'Hemoglobin (Hb)', canonicalUnit: 'g/dL' },
-  { key: 'calcium', name: 'Serum Calcium', canonicalUnit: 'mg/dL' },
+  { key: 'vitamin_d', name: "Vitamin D (25-OH)", canonicalUnit: 'ng/mL', group: 'Fat-Soluble Vitamin' },
+  { key: 'vitamin_b12', name: "Vitamin B12 (Cobalamin)", canonicalUnit: 'pg/mL', group: 'Water-Soluble Vitamin' },
+  { key: 'folate', name: "Folate (Vitamin B9)", canonicalUnit: 'ng/mL', group: 'Water-Soluble Vitamin' },
+  { key: 'ferritin', name: "Serum Ferritin (Iron Storage)", canonicalUnit: 'ng/mL', group: 'Mineral Storage' },
+  { key: 'hemoglobin', name: "Hemoglobin (Hb)", canonicalUnit: 'g/dL', group: 'Hematology' },
+  { key: 'calcium', name: "Serum Calcium", canonicalUnit: 'mg/dL', group: 'Mineral' },
+  { key: 'hba1c', name: "HbA1c (Glycated Haemoglobin)", canonicalUnit: '%', group: 'Blood Sugar Control' },
+  { key: 'fasting_glucose', name: "Fasting Blood Glucose", canonicalUnit: 'mg/dL', group: 'Blood Sugar Control' },
+  { key: 'postprandial_glucose', name: "Post-Meal (Post-Prandial) Blood Glucose", canonicalUnit: 'mg/dL', group: 'Blood Sugar Control' },
+  { key: 'total_cholesterol', name: "Total Cholesterol", canonicalUnit: 'mg/dL', group: 'Blood Fats (Lipids)' },
+  { key: 'triglycerides', name: "Triglycerides", canonicalUnit: 'mg/dL', group: 'Blood Fats (Lipids)' },
+  { key: 'ldl_cholesterol', name: "LDL Cholesterol", canonicalUnit: 'mg/dL', group: 'Blood Fats (Lipids)' },
+  { key: 'hdl_cholesterol', name: "HDL Cholesterol", canonicalUnit: 'mg/dL', group: 'Blood Fats (Lipids)' },
+  { key: 'creatinine', name: "Serum Creatinine", canonicalUnit: 'mg/dL', group: 'Kidney Function' },
+  { key: 'urea', name: "Blood Urea", canonicalUnit: 'mg/dL', group: 'Kidney Function' },
+  { key: 'uric_acid', name: "Serum Uric Acid", canonicalUnit: 'mg/dL', group: 'Kidney Function' },
+  { key: 'sgot_ast', name: "SGOT / AST", canonicalUnit: 'U/L', group: 'Liver Function' },
+  { key: 'sgpt_alt', name: "SGPT / ALT", canonicalUnit: 'U/L', group: 'Liver Function' },
+  { key: 'alkaline_phosphatase', name: "Alkaline Phosphatase", canonicalUnit: 'U/L', group: 'Liver Function' },
+  { key: 'bilirubin_total', name: "Total Bilirubin", canonicalUnit: 'mg/dL', group: 'Liver Function' },
+  { key: 'total_protein', name: "Total Protein", canonicalUnit: 'g/dL', group: 'Liver Function' },
+  { key: 'albumin', name: "Serum Albumin", canonicalUnit: 'g/dL', group: 'Liver Function' },
+  { key: 'wbc', name: "Total WBC Count (TLC)", canonicalUnit: 'cells/µL', group: 'Complete Blood Count' },
+  { key: 'rbc', name: "RBC Count", canonicalUnit: 'million/µL', group: 'Complete Blood Count' },
+  { key: 'platelets', name: "Platelet Count", canonicalUnit: '×10³/µL', group: 'Complete Blood Count' },
+  { key: 'pcv', name: "Hematocrit (PCV)", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'mcv', name: "MCV (Mean Cell Volume)", canonicalUnit: 'fL', group: 'Complete Blood Count' },
+  { key: 'mch', name: "MCH (Mean Cell Haemoglobin)", canonicalUnit: 'pg', group: 'Complete Blood Count' },
+  { key: 'mchc', name: "MCHC", canonicalUnit: 'g/dL', group: 'Complete Blood Count' },
+  { key: 'rdw', name: "RDW-CV", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'mpv', name: "Mean Platelet Volume (MPV)", canonicalUnit: 'fL', group: 'Complete Blood Count' },
+  { key: 'neutrophils', name: "Neutrophils (%)", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'neutrophils_abs', name: "Absolute Neutrophil Count", canonicalUnit: 'cells/µL', group: 'Complete Blood Count' },
+  { key: 'lymphocytes', name: "Lymphocytes (%)", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'lymphocytes_abs', name: "Absolute Lymphocyte Count", canonicalUnit: 'cells/µL', group: 'Complete Blood Count' },
+  { key: 'eosinophils', name: "Eosinophils (%)", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'eosinophils_abs', name: "Absolute Eosinophil Count", canonicalUnit: 'cells/µL', group: 'Complete Blood Count' },
+  { key: 'monocytes', name: "Monocytes (%)", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'monocytes_abs', name: "Absolute Monocyte Count", canonicalUnit: 'cells/µL', group: 'Complete Blood Count' },
+  { key: 'basophils', name: "Basophils (%)", canonicalUnit: '%', group: 'Complete Blood Count' },
+  { key: 'basophils_abs', name: "Absolute Basophil Count", canonicalUnit: 'cells/µL', group: 'Complete Blood Count' },
+  { key: 'esr', name: "ESR", canonicalUnit: 'mm/hr', group: 'Complete Blood Count' },
+  { key: 'tsh', name: "TSH (Thyroid Stimulating Hormone)", canonicalUnit: 'µIU/mL', group: 'Thyroid Function' },
+  { key: 't3', name: "Total T3", canonicalUnit: 'ng/dL', group: 'Thyroid Function' },
+  { key: 't4', name: "Total T4", canonicalUnit: 'µg/dL', group: 'Thyroid Function' },
+  { key: 'ft3', name: "Free T3", canonicalUnit: 'pg/mL', group: 'Thyroid Function' },
+  { key: 'ft4', name: "Free T4", canonicalUnit: 'ng/dL', group: 'Thyroid Function' },
+  { key: 'sodium', name: "Sodium", canonicalUnit: 'mmol/L', group: 'Electrolytes' },
+  { key: 'potassium', name: "Potassium", canonicalUnit: 'mmol/L', group: 'Electrolytes' },
+  { key: 'chloride', name: "Chloride", canonicalUnit: 'mmol/L', group: 'Electrolytes' },
+  { key: 'serum_iron', name: "Serum Iron", canonicalUnit: 'µg/dL', group: 'Iron Studies' },
+  { key: 'tibc', name: "TIBC (Total Iron Binding Capacity)", canonicalUnit: 'µg/dL', group: 'Iron Studies' },
+  { key: 'transferrin_saturation', name: "Transferrin Saturation", canonicalUnit: '%', group: 'Iron Studies' },
+  { key: 'ggt', name: "GGT (Gamma GT)", canonicalUnit: 'U/L', group: 'Liver Function' },
+  { key: 'bilirubin_direct', name: "Direct Bilirubin", canonicalUnit: 'mg/dL', group: 'Liver Function' },
+  { key: 'bilirubin_indirect', name: "Indirect Bilirubin", canonicalUnit: 'mg/dL', group: 'Liver Function' },
+  { key: 'globulin', name: "Globulin", canonicalUnit: 'g/dL', group: 'Liver Function' },
+  { key: 'bun', name: "Blood Urea Nitrogen (BUN)", canonicalUnit: 'mg/dL', group: 'Kidney Function' },
+  { key: 'egfr', name: "eGFR", canonicalUnit: 'mL/min/1.73m²', group: 'Kidney Function' },
+  { key: 'phosphorus', name: "Phosphorus", canonicalUnit: 'mg/dL', group: 'Kidney Function' },
+  { key: 'crp', name: "C-Reactive Protein (CRP)", canonicalUnit: 'mg/L', group: 'Inflammation' },
 ];
 
 const GRID = 'md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_40px] md:items-center md:gap-4';
@@ -26,6 +82,8 @@ const GRID = 'md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.9fr
 const MobileLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="mb-1 block text-xs font-medium text-slate-500 md:hidden">{children}</span>
 );
+
+const edited = (m: DetectedBiomarker) => (m.extraction_method === 'manual' ? 'manual' : 'edited');
 
 export const VerificationTable: React.FC<VerificationTableProps> = ({
   markers,
@@ -35,14 +93,13 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
   onProceedToProfile,
   onReset,
 }) => {
-  const [confirmed, setConfirmed] = React.useState(false);
-  React.useEffect(() => setConfirmed(false), [markers]);
   const [showSanitized, setShowSanitized] = React.useState(false);
 
   const handleValueChange = (index: number, val: number) => {
     setMarkers((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], detected_value: val, canonical_value: val, qualifier: null };
+      // An edited value is the person's own reading of the report, so earlier extraction notes no longer apply.
+      next[index] = { ...next[index], detected_value: val, canonical_value: val, qualifier: null, warnings: [], extraction_method: edited(next[index]) };
       return next;
     });
   };
@@ -50,7 +107,7 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
   const handleUnitChange = (index: number, unit: string) => {
     setMarkers((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], detected_unit: unit };
+      next[index] = { ...next[index], detected_unit: unit, canonical_value: next[index].detected_value, warnings: [], extraction_method: edited(next[index]) };
       return next;
     });
   };
@@ -102,18 +159,30 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
     (b) => !markers.some((m) => m.biomarker_key === b.key)
   );
 
+  const attentionCount = markers.filter((m) => reviewReason(m, markers)).length;
+  const blocked = markers.length === 0 || markers.some((m) => isBlocking(m, markers));
+  // Results that need attention are listed first; the rest keep the report's order.
+  const ordered = markers
+    .map((marker, idx) => ({ marker, idx }))
+    .sort((a, b) => Number(!reviewReason(a.marker, markers)) - Number(!reviewReason(b.marker, markers)));
+
   const methodBadge = (method: string) => {
     if (method === 'llm_fallback') return <Badge tone="indigo">AI-assisted</Badge>;
     if (method === 'manual') return <Badge>Added by you</Badge>;
+    if (method === 'edited') return <Badge>Edited</Badge>;
     return <Badge tone="brand">Auto</Badge>;
   };
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        eyebrow="Step 2 of 4"
-        title="Check your results"
-        description="We found these values in your report. Please confirm they match your lab slip, and correct anything that looks off."
+        eyebrow="Review results"
+        title={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'result needs' : 'results need'} your attention` : 'Your results'}
+        description={
+          attentionCount > 0
+            ? `We read ${markers.length} results from your report. The highlighted ones could not be confirmed automatically; everything else is ready.`
+            : `We read ${markers.length} results from your report. You can correct a value or add a missing test before continuing.`
+        }
         actions={
           <>
             {sanitizedPreview && (
@@ -151,28 +220,16 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
         </Card>
       )}
 
-      {warnings.map((warning, i) => <p role="status" className="text-sm text-amber-800" key={i}>{warning}</p>)}
-      <label
-        className={cx(
-          'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 shadow-card transition-colors',
-          confirmed ? 'border-brand-300 bg-brand-50' : 'border-amber-300 bg-amber-50',
-        )}
-      >
-        <input
-          type="checkbox"
-          checked={confirmed}
-          onChange={e => setConfirmed(e.target.checked)}
-          className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-brand-600"
-        />
-        <span className="text-sm leading-relaxed">
-          <span className={cx('block font-semibold', confirmed ? 'text-brand-800' : 'text-amber-900')}>
-            I checked every value and unit against the report and resolved warnings.
-          </span>
-          <span className={cx('mt-1 block', confirmed ? 'text-brand-700' : 'text-amber-800')}>
-            Qualified bounds must be removed or replaced with an exact result.
-          </span>
-        </span>
-      </label>
+      {warnings.length > 0 && (
+        <Card className="flex items-start gap-3 border-sky-200 bg-sky-50/60 p-4">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" aria-hidden />
+          <ul className="space-y-1 text-sm text-sky-900">
+            {warnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <Card className="overflow-hidden">
         {/* Column headings (desktop) */}
         <div
@@ -198,7 +255,8 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
           </div>
         ) : (
           <ul className="divide-y divide-slate-200">
-            {markers.map((marker, idx) => {
+            {ordered.map(({ marker, idx }) => {
+              const reason = reviewReason(marker, markers);
               const refLow = marker.report_reference_range?.low;
               const refHigh = marker.report_reference_range?.high;
               const isOutOfRange =
@@ -211,14 +269,20 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
                   key={`${id}-${idx}`}
                   className={cx(
                     GRID,
-                    'grid grid-cols-2 gap-x-4 gap-y-4 px-5 py-5 transition-colors hover:bg-slate-50/70 md:px-6 md:py-4'
+                    'grid grid-cols-2 gap-x-4 gap-y-4 px-5 py-5 transition-colors md:px-6 md:py-4',
+                    reason ? 'bg-amber-50/60' : 'hover:bg-slate-50/70'
                   )}
                 >
                   <div className="col-span-2 flex items-start justify-between gap-3 md:col-span-1 md:block">
                     <div>
                       <p className="text-[15px] font-semibold text-slate-900">{marker.display_name}</p>
-                      {isOutOfRange && (
-                        <p className="mt-0.5 text-xs font-medium text-amber-700">Outside reference range</p>
+                      {reason ? (
+                        <p className="mt-1 flex items-start gap-1.5 text-xs font-medium text-amber-800">
+                          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+                          {reason}
+                        </p>
+                      ) : (
+                        isOutOfRange && <p className="mt-0.5 text-xs font-medium text-slate-500">Outside reference range</p>
                       )}
                     </div>
                     <button
@@ -286,11 +350,9 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
 
                   <div className="col-span-2 flex items-center gap-2 md:col-span-1">
                     {methodBadge(marker.extraction_method)}
-                    <span className="text-xs text-slate-500 tabular-nums">
-                      {marker.verification_status || "needs_review"}{marker.source_page ? ` · Page ${marker.source_page}` : ""}
-                      {marker.qualifier && <span> · Reported {marker.qualifier}{marker.detected_value}</span>}
-                      {marker.warnings?.map((warning, i) => <span className="block text-amber-700" key={i}>{warning}</span>)}
-                    </span>
+                    {marker.source_page ? (
+                      <span className="text-xs text-slate-500 tabular-nums">Page {marker.source_page}</span>
+                    ) : null}
                   </div>
 
                   <div className="hidden justify-end md:flex">
@@ -310,19 +372,32 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
         )}
 
         {unaddedBiomarkers.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 md:px-6">
-            <span className="mr-1 text-sm font-medium text-slate-600">Add a biomarker</span>
-            {unaddedBiomarkers.map((b) => (
-              <button
-                key={b.key}
-                type="button"
-                onClick={() => handleAddMarker(b.key)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden />
-                {b.name}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 md:px-6">
+            <label htmlFor="add-biomarker" className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add a test from your report
+            </label>
+            <select
+              id="add-biomarker"
+              value=""
+              onChange={(e) => handleAddMarker(e.target.value)}
+              className="field w-full sm:w-auto sm:min-w-[18rem]"
+            >
+              <option value="" disabled>
+                Choose a test…
+              </option>
+              {[...new Set(unaddedBiomarkers.map((b) => b.group))].map((group) => (
+                <optgroup key={group} label={group}>
+                  {unaddedBiomarkers
+                    .filter((b) => b.group === group)
+                    .map((b) => (
+                      <option key={b.key} value={b.key}>
+                        {b.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
           </div>
         )}
       </Card>
@@ -330,12 +405,12 @@ export const VerificationTable: React.FC<VerificationTableProps> = ({
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-slate-500">
           <span className="font-semibold text-slate-900 tabular-nums">{markers.length}</span>{' '}
-          {markers.length === 1 ? 'biomarker' : 'biomarkers'} to review
+          {markers.length === 1 ? 'result' : 'results'} from your report
         </p>
         <Button
           size="lg"
           onClick={onProceedToProfile}
-          disabled={!confirmed || markers.length === 0 || markers.some(m => !m.detected_unit.trim() || m.qualifier || !Number.isFinite(m.detected_value)) || new Set(markers.map(m => m.biomarker_key)).size !== markers.length}
+          disabled={blocked}
           iconRight={<ArrowRight className="h-4 w-4" aria-hidden />}
         >
           Continue

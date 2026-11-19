@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n';
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { MarkerAnalysisResult } from '../types';
@@ -6,6 +7,9 @@ import { Badge, Card, STATUS_META, cx } from './ui';
 interface RangeSliderBarProps {
   analysis: MarkerAnalysisResult;
 }
+
+// Show up to two decimals without trailing zeros (0.01 stays 0.01; 15.00 becomes 15).
+const fmt = (n: number) => String(Number(n.toFixed(2)));
 
 export const RangeSliderBar: React.FC<RangeSliderBarProps> = ({ analysis }) => {
   const { display_name, value, unit, status, range_low, range_high, percentage_of_optimal, clinical_warning } =
@@ -22,17 +26,20 @@ export const RangeSliderBar: React.FC<RangeSliderBarProps> = ({ analysis }) => {
   const pointerPercent = Math.max(2, Math.min(98, ((clampedVal - visualMin) / span) * 100));
 
   const meta = STATUS_META[status];
+  const t = useT();
 
   const delta = (() => {
     switch (status) {
       case 'low':
-        return `${Math.abs(range_low - value).toFixed(1)} ${unit} below the healthy range`;
+        return t('belowHealthy', { x: `${fmt(Math.abs(range_low - value))} ${unit}` });
       case 'borderline':
-        return `Close to the lower limit of ${range_low} ${unit}`;
+        if (value > range_high) return t('aboveHealthy', { x: `${fmt(value - range_high)} ${unit}` });
+        if (value < range_low) return t('belowHealthy', { x: `${fmt(range_low - value)} ${unit}` });
+        return t('closeLower', { x: `${range_low} ${unit}` });
       case 'normal':
         return 'Within the healthy range';
       case 'high':
-        return `${(value - range_high).toFixed(1)} ${unit} above the healthy range`;
+        return t('aboveHealthy', { x: `${fmt(value - range_high)} ${unit}` });
     }
   })();
 

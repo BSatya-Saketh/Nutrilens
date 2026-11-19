@@ -2,6 +2,8 @@ import React from 'react';
 import { ArrowLeft, Check, ShieldCheck, Sparkles } from 'lucide-react';
 import { DietType, UserProfile } from '../types';
 import { Button, Card, PageHeader, cx } from './ui';
+import { BodyFields, CustomAllergyField, ExistingDietField, MeatFields } from './PlanProfileFields';
+import { useT } from '../lib/i18n';
 
 interface UserProfileFormProps {
   profile: UserProfile;
@@ -62,6 +64,8 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
   // Keep the editable value separate from the numeric API profile.
   const [ageInput, setAgeInput] = React.useState(String(profile.age));
   const [ageError, setAgeError] = React.useState<string | null>(null);
+  const t = useT();
+  const [bodyErrors, setBodyErrors] = React.useState<Record<string, string>>({});
 
   const handleSubmit = () => {
     if (!ageInput.trim()) {
@@ -74,6 +78,12 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
       return;
     }
     setAgeError(null);
+    const errors: Record<string, string> = {};
+    const h = profile.height_cm, w = profile.weight_kg;
+    if (h != null && (h < 120 || h > 220)) errors.height = t('heightError');
+    if (w != null && (w < 30 || w > 200)) errors.weight = t('weightError');
+    setBodyErrors(errors);
+    if (Object.keys(errors).length) return;
     const validatedProfile = { ...profile, age };
     setProfile(validatedProfile);
     // Pass the validated value explicitly: React state updates are asynchronous.
@@ -93,7 +103,7 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        eyebrow="Step 3 of 4"
+        eyebrow="Your profile"
         title="Tell us about you"
         description="Your age, sex and food preferences help us pick the right reference ranges and only suggest foods you can eat."
         actions={
@@ -103,7 +113,7 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
             onClick={onBack}
             icon={<ArrowLeft className="h-4 w-4" aria-hidden />}
           >
-            Review biomarkers
+            Review results
           </Button>
         }
       />
@@ -172,6 +182,14 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
           </div>
         </section>
 
+        <section className="grid gap-6 p-6 sm:grid-cols-2 sm:p-8" aria-labelledby="body-heading">
+          <div className="sm:col-span-2">
+            <h3 id="body-heading" className="text-base font-semibold">{t('bodyHeading')}</h3>
+            <p className="mt-0.5 text-sm text-slate-500">{t('bodyHint')}</p>
+          </div>
+          <BodyFields profile={profile} setProfile={setProfile} errors={bodyErrors} />
+        </section>
+
         {/* Diet */}
         <section className="space-y-4 p-6 sm:p-8" aria-labelledby="diet-heading">
           <div>
@@ -222,6 +240,8 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
               );
             })}
           </div>
+          <MeatFields profile={profile} setProfile={setProfile} />
+          <div className="pt-2"><ExistingDietField profile={profile} setProfile={setProfile} /></div>
         </section>
 
         {/* Allergens */}
@@ -274,12 +294,13 @@ export const UserProfileForm: React.FC<UserProfileFormProps> = ({
               );
             })}
           </div>
+          <CustomAllergyField profile={profile} setProfile={setProfile} />
         </section>
 
         {/* Action */}
         <div className="flex flex-col-reverse items-stretch justify-between gap-4 rounded-b-2xl bg-slate-50 px-6 py-5 sm:flex-row sm:items-center sm:px-8">
           <p className="text-sm text-slate-500">
-            Matched against <strong className="font-semibold text-slate-700">65 ICMR-NIN Indian foods</strong>.
+            Matched against <strong className="font-semibold text-slate-700">180+ ICMR-NIN Indian foods</strong>.
           </p>
           <Button
             size="lg"

@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -12,7 +13,8 @@ from app.config import settings
 from app.models.schemas import ExtractionResponse
 from app.parsers.sanitizer import sanitize_report_text, clinical_evidence_only
 from app.parsers.pdf_extractor import extract_upload, ReportError
-from app.parsers.regex_matcher import extract_biomarkers_with_regex, mentioned_keys
+from app.parsers.regex_matcher import extract_biomarkers_with_regex, mentioned_keys, found_keys
+from app.engine.rule_engine import BIOMARKERS_CONFIG
 from app.parsers.llm_fallback import extract_with_gemini_fallback
 
 router = APIRouter()
@@ -27,12 +29,16 @@ def process_report(data, filename, mime, raw_text):
         raise ReportError('Report exceeds the configured text limit.')
     sanitized, _ = sanitize_report_text(text)
     markers = extract_biomarkers_with_regex(sanitized)
-    missing = mentioned_keys(sanitized) - {m.biomarker_key for m in markers}
-    warnings = [f'{key}: mentioned but no reliable result extracted; add manually.' for key in sorted(missing)]
+    missing = mentioned_keys(sanitized) - found_keys(markers)
+    names = [BIOMARKERS_CONFIG[key]['display_name'] for key in sorted(missing)]
+    warnings = [f'{name} is mentioned in the report but its value could not be read. Add it with "Add a test" if needed.'
+                for name in names]
+    warnings += [f'Page {page} is a picture that could not be read automatically. If it shows results not listed '
+                 'below, add them manually.' for page in re.findall(r'\[\[PAGE (\d+) unread\]\]', text)]
     if not markers or missing or any(m.warnings for m in markers):
         evidence = clinical_evidence_only(sanitized)
         if not evidence:
-            warnings.append('AI fallback withheld: no verifiably de-identified clinical evidence. Review manually.')
+            pass  # no de-identified evidence to send; local results stand
         else:
             try:
                 candidates = extract_with_gemini_fallback(sanitized)
@@ -42,16 +48,46 @@ def process_report(data, filename, mime, raw_text):
                         candidate.verification_status = 'conflict'
                         candidate.warnings.append('AI/local disagreement requires manual verification.')
                         markers.append(candidate)
-                if not candidates:
-                    warnings.append('AI fallback did not recover validated values; review missing or uncertain results manually.')
             except ValueError:
-                warnings.append('Gemini unavailable or invalid response; local results retained for review.')
+                pass  # the AI helper is optional; local results stand
     if not markers:
-        warnings.append('No supported biomarkers extracted. Retry with a clearer report or add results manually.')
+        warnings.append("We couldn't find supported test results in this report. Try a clearer copy, or add your results manually.")
     # Do not expose arbitrary report headers as an allegedly anonymous preview.
     return ExtractionResponse(session_id=str(uuid.uuid4()), sanitized_preview=clinical_evidence_only(sanitized)[:400],
                               extracted_biomarkers=markers, warnings=warnings,
                               unmatched_text_lines=sorted(missing))
+
+
+@router.post('/diet-text')
+async def diet_text(file: UploadFile = File(...)):
+    """Text from a photo or PDF of the person's usual diet (OCR with Tesseract), for the profile's existing-diet box."""
+    try:
+        data = await file.read(settings.max_upload_bytes + 1)
+    finally:
+        await file.close()
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(413, 'File exceeds the configured upload size limit.')
+    if _slots.locked():
+        raise HTTPException(503, 'Report processor is busy. Please retry shortly.')
+    async with _slots:
+        payload = json.dumps(dict(mode='diet', data=base64.b64encode(data).decode(), filename=file.filename or '',
+                                  mime=file.content_type or '', text=None)).encode()
+        env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[3]))
+        worker = await asyncio.create_subprocess_exec(sys.executable, '-m', 'app.parsers.worker',
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            env=env, start_new_session=True)
+        try:
+            stdout, _ = await asyncio.wait_for(worker.communicate(payload), timeout=settings.processing_timeout_seconds)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            os.killpg(worker.pid, signal.SIGKILL)
+            await worker.wait()
+            raise HTTPException(504, 'Reading the file timed out. Try a clearer photo or type your meals.') from None
+    response = json.loads(stdout)
+    if 'error' in response:
+        raise HTTPException(422, response['error'])
+    if not response['result']['text']:
+        raise HTTPException(422, 'No text could be read. Try a clearer photo or type your meals.')
+    return response['result']
 
 
 @router.post('/extract-report', response_model=ExtractionResponse)
@@ -83,17 +119,8 @@ async def extract_report(file: Optional[UploadFile] = File(None), raw_text: Opti
             try:
                 stdout, _ = await asyncio.wait_for(worker.communicate(payload), timeout=settings.processing_timeout_seconds)
             except (asyncio.TimeoutError, asyncio.CancelledError):
-                try:
-                    if hasattr(os, "killpg") and hasattr(signal, "SIGKILL"):
-                        os.killpg(worker.pid, signal.SIGKILL)
-                    else:
-                        worker.kill()
-                except Exception:
-                    pass
-                try:
-                    await worker.wait()
-                except Exception:
-                    pass
+                os.killpg(worker.pid, signal.SIGKILL)
+                await worker.wait()
                 raise HTTPException(504, 'Report processing timed out. Try fewer pages or paste text.') from None
             response = json.loads(stdout)
             if 'error' in response:

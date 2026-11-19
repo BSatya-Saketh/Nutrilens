@@ -1,3 +1,4 @@
+import { hasKey, StringKey, useT } from '../lib/i18n';
 import React from 'react';
 import {
   Activity,
@@ -27,6 +28,7 @@ interface ClinicalNarrativeProps {
 }
 
 export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) => {
+  const t = useT();
   const explanation = result.grounded_explanation || '';
   const flaggedMarkers = result.marker_analyses.filter((m) => m.status !== 'normal');
   const optimalMarkers = result.marker_analyses.filter((m) => m.status === 'normal');
@@ -73,10 +75,10 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
               </span>
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
-                  Clinical Synthesis & Metabolic Interpretation
+                  What Your Results Mean
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Physiological evaluation grounded in ICMR-NIN nutritional composition
+                  A plain-language summary of your results and plan
                 </p>
               </div>
             </div>
@@ -84,11 +86,11 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
             <div className="flex items-center gap-2">
               <Badge tone={flaggedMarkers.length === 0 ? 'brand' : 'amber'}>
                 {flaggedMarkers.length === 0
-                  ? 'All Biomarkers Optimal'
-                  : `${flaggedMarkers.length} Parameter${flaggedMarkers.length > 1 ? 's' : ''} Flagged`}
+                  ? 'All results in range'
+                  : t(flaggedMarkers.length > 1 ? 'needMany' : 'needOne', { n: flaggedMarkers.length })}
               </Badge>
               <Badge tone="neutral">
-                {Math.round((optimalMarkers.length / (result.marker_analyses.length || 1)) * 100)}% Optimal Index
+                {t('pctInRange', { n: Math.round((optimalMarkers.length / (result.marker_analyses.length || 1)) * 100) })}
               </Badge>
             </div>
           </div>
@@ -100,13 +102,16 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
             {flaggedMarkers.length === 0 ? (
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-600 mt-0.5" />
-                <p>
-                  All <strong>{result.marker_analyses.length} tested biomarkers</strong> reside comfortably within standard biological reference intervals. Your blood chemistry indicates robust physiological homeostasis across oxygen transport, bone mineralization, and neuro-cellular cellular stores.
-                </p>
+                <p>{t('allTested', { n: result.marker_analyses.length })}</p>
               </div>
             ) : (
               <p>
-                Laboratory analysis reveals that <strong>{flaggedMarkers.length} of {result.marker_analyses.length} parameters</strong> are below reference intervals ({flaggedMarkers.filter(m => m.status === 'low').length} Low, {flaggedMarkers.filter(m => m.status === 'borderline').length} Borderline). The therapeutic food protocol below focuses on nutrient-dense Indian staples with high absorption bioavailability to support restoration.
+                {t('labSummary', {
+                  a: flaggedMarkers.length, n: result.marker_analyses.length,
+                  low: flaggedMarkers.filter((m) => m.status === 'low').length,
+                  border: flaggedMarkers.filter((m) => m.status === 'borderline').length,
+                  high: flaggedMarkers.filter((m) => m.status === 'high').length,
+                })}
               </p>
             )}
           </div>
@@ -116,7 +121,7 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
             <div className="space-y-4">
               <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-800">
                 <Activity className="h-4 w-4 text-brand-600" />
-                Biomarker Depletion & Physiological Impact
+                Biomarker Findings & Physiological Impact
               </h4>
               <div className="grid gap-4 md:grid-cols-2">
                 {flaggedMarkers.map((m) => (
@@ -137,24 +142,28 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
                             'rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize',
                             m.status === 'low'
                               ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                              : m.status === 'high'
+                              ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
                               : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
                           )}
                         >
-                          {m.status} ({Math.round(m.percentage_of_optimal)}% optimal)
+                          {t('statusPct', { status: t(`status_${m.status}` as StringKey), n: Math.round(m.percentage_of_optimal) })}
                         </span>
                       </div>
 
                       <p className="mt-3 text-xs leading-relaxed text-slate-600">
                         {m.clinical_warning ||
                           (m.status === 'low'
-                            ? `Value is significantly below the laboratory's reference range (${m.range_low} ${m.unit}). Cellular stores require targeted nutritional repletion.`
-                            : `Value is on the borderline threshold. Preventative nutritional intervention recommended to avoid depletion.`)}
+                            ? t('valueBelow', { x: `${m.range_low} ${m.unit}` })
+                            : m.status === 'high'
+                            ? t('valueAbove', { x: `${m.range_high} ${m.unit}` })
+                            : t('valueBorder'))}
                       </p>
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
                       <span>Primary Target</span>
-                      <span className="text-brand-700 font-semibold capitalize">{m.target_nutrient_key.replace('_', ' ')}</span>
+                      <span className="text-brand-700 font-semibold capitalize">{m.target_nutrient_key ? (hasKey(`target_${m.target_nutrient_key}`) ? t(`target_${m.target_nutrient_key}` as StringKey) : m.target_nutrient_key.replace(/_/g, ' ')) : t('doctorReview')}</span>
                     </div>
                   </div>
                 ))}
@@ -188,7 +197,7 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
                 <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-5">
                   <div className="flex items-center gap-2 text-sm font-semibold text-rose-800">
                     <ThumbsDown className="h-4 w-4 text-rose-600" />
-                    Absorption Antagonists (Inhibitors to Space)
+                    Habits to Limit or Avoid
                   </div>
                   <ul className="mt-3 space-y-2.5 text-xs text-slate-700 leading-relaxed">
                     {result.recommendations.flatMap((r) => r.absorption_donts).slice(0, 3).map((tip, idx) => (
@@ -213,7 +222,7 @@ export const ClinicalNarrative: React.FC<ClinicalNarrativeProps> = ({ result }) 
                     Clinical Supervision Recommended
                   </h5>
                   <p className="mt-1 text-xs leading-relaxed text-red-800">
-                    One or more of your biomarkers have crossed critical depletion limits (e.g. severe anemia or acute deficiency). Dietary changes should complement, not replace, medical evaluation.
+                    One or more results need a doctor’s attention. Dietary changes should complement, not replace, medical evaluation.
                   </p>
                   <ul className="mt-2 list-disc list-inside text-xs text-red-700 space-y-1">
                     {result.consult_reasons.map((reason, i) => (

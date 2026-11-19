@@ -4,10 +4,13 @@ import { Compass } from 'lucide-react';
 import { AuthProvider } from './auth/AuthContext';
 import { RequireAuth } from './auth/RequireAuth';
 import { EmptyState } from './components/brand';
+import { ChatAssistant } from './components/ChatAssistant';
 import { DisclaimerModal } from './components/DisclaimerModal';
 import { Footer } from './components/Footer';
 import { Navbar } from './components/Navbar';
 import { ServerWakeNotice } from './components/ServerWakeNotice';
+import { LanguagePrompt } from './components/LanguagePrompt';
+import { ArticlePage, ArticlesPage, FaqPage, SciencePage } from './pages/LearnPages';
 import { ToastProvider } from './components/Toast';
 import { Card, buttonClasses } from './components/ui';
 import { useAnalyzer } from './hooks/useAnalyzer';
@@ -49,6 +52,8 @@ const SiteLayout: React.FC = () => {
       </main>
       <Footer onOpenDisclaimer={() => setShowDisclaimer(true)} />
       <DisclaimerModal isOpen={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
+      <ChatAssistant />
+      <LanguagePrompt />
     </div>
   );
 };
@@ -79,6 +84,10 @@ export const App: React.FC = () => {
             <Route element={<SiteLayout />}>
               <Route index element={<AnalyzerPage analyzer={analyzer} />} />
               <Route path="history" element={<HistoryPage />} />
+              <Route path="science" element={<SciencePage />} />
+              <Route path="faq" element={<FaqPage />} />
+              <Route path="articles" element={<ArticlesPage />} />
+              <Route path="articles/:slug" element={<ArticlePage />} />
               <Route path="history/:id" element={<RequireAuth><HistoryDetailPage /></RequireAuth>} />
               <Route path="account" element={<RequireAuth><AccountPage /></RequireAuth>} />
               <Route path="admin" element={<RequireAuth roles={['admin', 'owner']}><AdminLayout /></RequireAuth>}>

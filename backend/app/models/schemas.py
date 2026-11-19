@@ -88,6 +88,7 @@ class NutrientRecommendationPlan(BaseModel):
     recommended_foods: List[FoodRecommendation]
     absorption_dos: List[str]
     absorption_donts: List[str]
+    purpose: str = "improve"  # "improve" for out-of-range results, "maintain" for healthy ones
 
 class FullAnalysisResponse(BaseModel):
     analysis_id: str
@@ -100,4 +101,5 @@ class FullAnalysisResponse(BaseModel):
     requires_physician_consult: bool
     consult_reasons: List[str]
     saved_to_history: bool = False
+    diet_plan: Optional[Dict[str, Any]] = None
 

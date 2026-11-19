@@ -213,12 +213,10 @@ test('the application defaults to 25 and sends an edited age through analysis to
         .set.call(textarea, '25-OH Vitamin D  12  ng/mL  30 - 100');
       textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
-    const extract = [...document.querySelectorAll('button')].find(el => el.textContent.includes('Extract biomarkers'));
+    const extract = [...document.querySelectorAll('button')].find(el => el.textContent.includes('Analyse my report'));
     await act(async () => { extract.click(); await new Promise(resolve => setTimeout(resolve, 1500)); });
-    const confirmation = document.querySelector('input[type="checkbox"]');
-    await act(() => confirmation.click());
-    const next = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Continue');
-    await act(() => next.click());
+    // A cleanly read report skips the review step and goes straight to the profile, with a summary to review from.
+    assert.match(document.body.textContent, /1 result read from your report/);
     assert.equal(document.getElementById('age').value, '25');
     await editAge('');
     await editAge('65');
@@ -229,7 +227,7 @@ test('the application defaults to 25 and sends an edited age through analysis to
     });
     assert.equal(submittedAnalysis.user_profile.age, 65);
     assert.equal(submittedAnalysis.biomarkers[0].value, 12);
-    assert.match(document.body.textContent, /Personalized Clinical Nutrition Plan/);
+    assert.match(document.body.textContent, /Your personalised diet plan/);
     assert.match(document.body.textContent, /isn't saved because you're browsing as a guest/);
   } finally { globalThis.fetch = originalFetch; }
 });

@@ -35,7 +35,7 @@ def test_images(monkeypatch,ext,mime,fmt):
 
 
 def test_scanned(monkeypatch):
-    monkeypatch.setattr(pdf,'ocr_image',lambda image,deadline:'Vitamin B12 180 pg/mL')
+    monkeypatch.setattr(pdf,'ocr_image',lambda image,deadline,angles=None:'Vitamin B12 180 pg/mL')
     assert parse(pdf.extract_upload(make_pdf(['']),'x.pdf','application/pdf'))[0].detected_value == 180
 
 
@@ -103,7 +103,9 @@ def test_ai_failure(monkeypatch):
     def fail(text): raise ValueError('private')
     monkeypatch.setattr(extract,'extract_with_gemini_fallback',fail)
     result=extract.process_report(None,'','','Vitamin D 12 ng/mL\nFolate unknown')
-    assert len(result.extracted_biomarkers)==1 and any('Gemini unavailable' in w for w in result.warnings)
+    # The optional AI helper failing is not the user's concern: local results stand and the message is plain.
+    assert len(result.extracted_biomarkers)==1 and not any('private' in w or 'Gemini' in w for w in result.warnings)
+    assert any(w.startswith('Folate') and 'could not be read' in w for w in result.warnings)
 
 
 def test_no_ocr(monkeypatch):

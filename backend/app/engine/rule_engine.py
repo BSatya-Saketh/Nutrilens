@@ -14,6 +14,11 @@ def load_biomarkers_data() -> Dict[str, Any]:
 BIOMARKERS_CONFIG = load_biomarkers_data()
 
 class RuleEngine:
+    @staticmethod
+    def _display_ceiling(value: float) -> float:
+        """Bands are stored as 99.99 so that 99.995 falls in the next band; show the familiar whole number (99)."""
+        return float(int(value)) if abs(value - int(value) - 0.99) < 1e-9 else value
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or BIOMARKERS_CONFIG
 
@@ -27,30 +32,56 @@ class RuleEngine:
         )
 
         # 1. Determine reference intervals
+        direction = bio_info.get("direction", "lower_is_worse")
         intervals = bio_info.get("standard_intervals", {})
         gender_key = profile.gender.lower() if profile.gender.lower() in ["male", "female"] else "female"
-        target_interval = intervals.get(gender_key) or intervals.get("adult") or {}
+        target_interval = intervals.get(gender_key) or intervals.get("adult") or next(iter(intervals.values()), {})
         normal_band = target_interval.get("normal", {})
         borderline_band = target_interval.get("borderline", {})
+        high_band = target_interval.get("high", {})
 
         range_low = marker.reference_low
         range_high = marker.reference_high
 
-        has_custom_report_range = range_low is not None and range_high is not None
+        # Markers whose printed reference text is a multi-band table (lipids) or follows a guideline (blood sugar)
+        # are judged against the standard bands; the others prefer the range printed on the report.
+        # A one-sided printed range ("< 5", "> 60") is completed with 0 or the standard upper limit.
+        has_custom_report_range = (bio_info.get("use_report_range", True)
+                                   and (range_low is not None or range_high is not None))
 
         if not has_custom_report_range:
             range_low = normal_band.get("min", 0.0)
             range_high = normal_band.get("max", 100.0)
         else:
             # Normalize report ranges if passed in alternate units
-            if marker.unit.strip().lower() != canonical_unit.lower():
+            if range_low is not None:
                 range_low, _ = convert_to_canonical(marker.biomarker_key, range_low, marker.unit)
+            if range_high is not None:
                 range_high, _ = convert_to_canonical(marker.biomarker_key, range_high, marker.unit)
+            if range_low is None:
+                range_low = 0.0
+            if range_high is None:
+                range_high = max(normal_band.get("max", range_low), range_low)
 
         # 2. Status Classification
         status = MarkerStatus.NORMAL
-        
-        if not has_custom_report_range and borderline_band:
+        if direction == "higher_is_worse":
+            # Lower values are better: normal up to a ceiling, then borderline, then high.
+            high_cut = high_band.get("min", range_high)
+            if range_low > 0 and canonical_val < range_low:
+                status = MarkerStatus.LOW
+            elif canonical_val <= range_high:
+                status = MarkerStatus.NORMAL
+            elif canonical_val < high_cut:
+                status = MarkerStatus.BORDERLINE
+            else:
+                status = MarkerStatus.HIGH
+        elif direction == "two_sided":
+            if canonical_val < range_low:
+                status = MarkerStatus.LOW
+            elif canonical_val > range_high:
+                status = MarkerStatus.HIGH
+        elif not has_custom_report_range and borderline_band:
             b_min = borderline_band.get("min", range_low)
             b_max = borderline_band.get("max", range_low)
             if canonical_val < b_min:
@@ -77,12 +108,32 @@ class RuleEngine:
         warning_thresh = bio_info.get("clinical_warning_threshold")
         if warning_thresh is not None and canonical_val <= warning_thresh:
             clinical_warning = bio_info.get("clinical_warning_message")
+        high_thresh = bio_info.get("clinical_warning_high_threshold")
+        if high_thresh is not None and canonical_val >= high_thresh:
+            clinical_warning = bio_info.get("clinical_warning_message")
+        if clinical_warning is None and status == MarkerStatus.LOW and bio_info.get("low_status_message"):
+            clinical_warning = bio_info["low_status_message"]
+        food_plan_on = bio_info.get("food_plan_on") or {}
+        factor = bio_info.get("doctor_above_factor")
+        if clinical_warning is None and factor and range_high > 0 and canonical_val >= factor * range_high:
+            clinical_warning = (f"{bio_info['display_name']} is more than {factor} times the upper limit of its reference "
+                                "range. Please see a doctor; diet changes alone are not enough.")
+        if (clinical_warning is None and status != MarkerStatus.NORMAL and bio_info.get("abnormal_requires_consult")
+                and status.value not in food_plan_on):
+            where = "below" if status == MarkerStatus.LOW or (
+                status == MarkerStatus.BORDERLINE and direction == "lower_is_worse") else "above"
+            clinical_warning = (f"{bio_info['display_name']} is {where} its reference range. NutriLens does not give food advice "
+                                "for this test; please review it with your doctor.")
 
         # 4. Percentage of Optimal calculation
-        if range_low > 0:
-            pct = round((canonical_val / range_low) * 100, 1)
-        else:
+        if direction == "lower_is_worse":
+            pct = round((canonical_val / range_low) * 100, 1) if range_low > 0 else 100.0
+        elif canonical_val <= 0:
             pct = 100.0
+        elif status == MarkerStatus.LOW:
+            pct = round((canonical_val / range_low) * 100, 1) if range_low > 0 else 100.0
+        else:
+            pct = round(min(100.0, (range_high / canonical_val) * 100), 1)
 
         return MarkerAnalysisResult(
             biomarker_key=marker.biomarker_key,
@@ -91,8 +142,8 @@ class RuleEngine:
             unit=canonical_unit,
             status=status,
             range_low=round(range_low, 2),
-            range_high=round(range_high, 2),
+            range_high=round(self._display_ceiling(range_high), 2),
             percentage_of_optimal=pct,
             clinical_warning=clinical_warning,
-            target_nutrient_key=bio_info["target_nutrient_key"]
+            target_nutrient_key=food_plan_on.get(status.value) or bio_info.get("target_nutrient_key") or ""
         )
