@@ -58,16 +58,6 @@ def process_report(data, filename, mime, raw_text):
                               unmatched_text_lines=sorted(missing))
 
 
-def _kill_worker(worker):
-    try:
-        if hasattr(os, "killpg") and hasattr(signal, "SIGKILL"):
-            os.killpg(worker.pid, signal.SIGKILL)
-        else:
-            worker.kill()
-    except Exception:
-        pass
-
-
 @router.post('/diet-text')
 async def diet_text(file: UploadFile = File(...)):
     """Text from a photo or PDF of the person's usual diet (OCR with Tesseract), for the profile's existing-diet box."""
@@ -89,11 +79,8 @@ async def diet_text(file: UploadFile = File(...)):
         try:
             stdout, _ = await asyncio.wait_for(worker.communicate(payload), timeout=settings.processing_timeout_seconds)
         except (asyncio.TimeoutError, asyncio.CancelledError):
-            _kill_worker(worker)
-            try:
-                await worker.wait()
-            except Exception:
-                pass
+            os.killpg(worker.pid, signal.SIGKILL)
+            await worker.wait()
             raise HTTPException(504, 'Reading the file timed out. Try a clearer photo or type your meals.') from None
     response = json.loads(stdout)
     if 'error' in response:
@@ -132,11 +119,8 @@ async def extract_report(file: Optional[UploadFile] = File(None), raw_text: Opti
             try:
                 stdout, _ = await asyncio.wait_for(worker.communicate(payload), timeout=settings.processing_timeout_seconds)
             except (asyncio.TimeoutError, asyncio.CancelledError):
-                _kill_worker(worker)
-                try:
-                    await worker.wait()
-                except Exception:
-                    pass
+                os.killpg(worker.pid, signal.SIGKILL)
+                await worker.wait()
                 raise HTTPException(504, 'Report processing timed out. Try fewer pages or paste text.') from None
             response = json.loads(stdout)
             if 'error' in response:
