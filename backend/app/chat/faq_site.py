@@ -99,7 +99,7 @@ FAQ_SITE = [
      ["Which foods are rich in iron?", "Which foods are rich in calcium?"]),
     ("regional", ["south indian foods", "do you have north indian foods", "telugu food names", "local foods",
                   "foods from my state", "do you include regional foods"],
-     'Yes. Diet plans use **278 home-style dishes** from every Indian state and union territory: for '
+     'Yes. Diet plans use **276 home-style dishes** from every Indian state and union territory: for '
      'example pesarattu and gongura pachadi from Andhra and Telangana, sambar and kootu from Tamil Nadu, '
      'puttu and avial from Kerala, rajma and makki roti from Punjab, poha and thalipeeth from Maharashtra, '
      'machher jhol from Bengal and litti chokha from Bihar. Choose your state in your profile; the '
@@ -492,7 +492,7 @@ FAQ_SITE = [
      ["How do I get my diet plan?", "Which tests are supported?"]),
     ("dish_count", ["how many dishes are there", "how many recipes do you have", "how many dishes in the planner",
                     "is my favourite dish there", "list of dishes"],
-     "The planner uses **278 home-style dishes** from every Indian state and union territory: breakfasts, rice and "
+     "The planner uses **276 home-style dishes** from every Indian state and union territory: breakfasts, rice and "
      "roti, dals, curries, chutneys, snacks, drinks and a few sweets. Each dish's nutrients are calculated from its "
      "raw ingredients using the Indian Food Composition Tables. Choose your state in your profile to see your "
      "region's dishes more often.",
