@@ -156,6 +156,8 @@ export interface FullAnalysisResponse {
   consult_reasons: string[];
   saved_to_history?: boolean;
   diet_plan?: { style: PlanStyle; days: PlanDay[]; shopping_list: ShoppingItem[]; saved_at?: string } | null;
+  allergy_conflicts?: string[];
+  can_regenerate?: boolean;
 }
 
 /* ------------------------------------------------------------------ accounts */

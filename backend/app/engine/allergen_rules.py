@@ -158,6 +158,9 @@ def is_dish_allergen_free(dish: Dict[str, Any], norm_allergens: Set[str]) -> boo
 
     # 2. Deep ingredient stems check
     ingredients = dish.get("ingredients", [])
+    if not ingredients and norm_allergens:
+        # If ingredient data is insufficient to verify an exclusion, omit the dish
+        return False
     for ing in ingredients:
         name = ing.get("name", "").lower()
         for alg in norm_allergens:
@@ -168,3 +171,56 @@ def is_dish_allergen_free(dish: Dict[str, Any], norm_allergens: Set[str]) -> boo
                     return False
 
     return True
+
+
+def check_saved_report_allergy_conflicts(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Inspects a previously saved analysis and surfaces any conflicts between historical
+    recommendations/plans and the user's allergy settings while preserving original lab data intact.
+    """
+    profile = analysis.get("user_profile") or {}
+    if hasattr(profile, "model_dump"):
+        profile = profile.model_dump()
+    raw_allergens = profile.get("allergens") or []
+    norm_allergens = normalize_allergens(raw_allergens)
+    if not norm_allergens:
+        return {"allergy_conflicts": [], "can_regenerate": False}
+
+    conflicts = []
+
+    # 1. Check recommended foods
+    for rec in analysis.get("recommendations", []):
+        foods = rec.get("recommended_foods", []) if isinstance(rec, dict) else getattr(rec, "recommended_foods", [])
+        for f in foods:
+            f_dict = f if isinstance(f, dict) else (f.model_dump() if hasattr(f, "model_dump") else getattr(f, "__dict__", {}))
+            f_algs = normalize_allergens(f_dict.get("allergens", []))
+            if f_algs & norm_allergens:
+                conflicts.append(f"Recommended food '{f_dict.get('name')}' matches excluded allergen.")
+                continue
+            name_tip = (f_dict.get("name", "") + " " + (f_dict.get("preparation_tip") or "")).lower()
+            for alg in norm_allergens:
+                stems = ALLERGEN_INGREDIENT_STEMS.get(alg, set())
+                if any(re.search(r"\b" + re.escape(s) + r"\b", name_tip) for s in stems):
+                    conflicts.append(f"Food item '{f_dict.get('name')}' mentions {alg} in ingredients or advice.")
+                    break
+
+    # 2. Check saved diet plan dishes
+    diet_plan = analysis.get("diet_plan")
+    if diet_plan and isinstance(diet_plan, dict):
+        from app.plan.catalog import catalog
+        cat = catalog()
+        for day in diet_plan.get("days", []):
+            meals = day.get("meals", {}) if isinstance(day, dict) else {}
+            for slot, items in meals.items():
+                for item in items:
+                    dish_id = item.get("dish_id") if isinstance(item, dict) else getattr(item, "dish_id", None)
+                    d = cat.get(dish_id)
+                    if d and not is_dish_allergen_free(d, norm_allergens):
+                        conflicts.append(f"Saved meal plan dish '{item.get('name')}' conflicts with excluded {', '.join(sorted(norm_allergens))}.")
+
+    # Deduplicate conflicts while preserving order
+    unique_conflicts = list(dict.fromkeys(conflicts))
+    return {
+        "allergy_conflicts": unique_conflicts,
+        "can_regenerate": bool(unique_conflicts),
+    }

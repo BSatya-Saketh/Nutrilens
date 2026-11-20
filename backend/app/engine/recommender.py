@@ -1,9 +1,10 @@
 import json
 import re
 import os
+import re
 from typing import List, Dict, Any, Optional
 from app.engine.rule_engine import BIOMARKERS_CONFIG
-from app.engine.allergen_rules import normalize_allergens, sanitize_tip_text
+from app.engine.allergen_rules import normalize_allergens, sanitize_tip_text, ALLERGEN_INGREDIENT_STEMS
 from app.models.schemas import (
     UserProfile,
     MarkerAnalysisResult,
@@ -177,6 +178,20 @@ class RecommendationEngine:
             food_allergens = normalize_allergens(food.get("allergens", []))
             if user_allergens.intersection(food_allergens):
                 continue  # Disqualified due to allergen
+
+            # Deep stem check on food name and preparation tips
+            name_tip = (food.get("name", "") + " " + (food.get("preparation_tip") or "")).lower()
+            stem_match = False
+            for alg in user_allergens:
+                stems = ALLERGEN_INGREDIENT_STEMS.get(alg, set())
+                for stem in stems:
+                    if re.search(r"\b" + re.escape(stem) + r"\b", name_tip):
+                        stem_match = True
+                        break
+                if stem_match:
+                    break
+            if stem_match:
+                continue
 
             # 2. Diet Type Check
             food_diets = food.get("diet_type", [])

@@ -3,6 +3,7 @@ import { translateText } from '../lib/domTranslate';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Activity,
+  AlertTriangle,
   Ban,
   CheckCircle2,
   Download,
@@ -280,6 +281,30 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           <div style={{ width: `${(elevatedCount / totalMarkers) * 100}%` }} className="h-full bg-indigo-500" />
         </div>
       </Card>
+
+      {/* Allergy Conflict Banner for Saved Reports */}
+      {result.allergy_conflicts && result.allergy_conflicts.length > 0 && (
+        <Alert
+          tone="warning"
+          icon={<AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden />}
+          title="Allergy Conflict Detected in Saved History"
+          className="p-5"
+        >
+          <p className="text-sm text-amber-950 font-medium leading-relaxed">
+            Original lab values and intervals are preserved. However, this saved recommendation contains items that conflict with your current allergy profile:
+          </p>
+          <ul className="mt-2 list-disc list-inside space-y-1 text-xs text-amber-900 font-medium">
+            {result.allergy_conflicts.map((conflict, idx) => (
+              <li key={idx}>{conflict}</li>
+            ))}
+          </ul>
+          <div className="mt-3">
+            <Button size="sm" variant="secondary" onClick={() => openTab('plan')}>
+              Regenerate Safe Plan
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       {/* Critical Physician advisory */}
       {result.requires_physician_consult && (

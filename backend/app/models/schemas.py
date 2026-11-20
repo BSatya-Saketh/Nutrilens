@@ -106,4 +106,6 @@ class FullAnalysisResponse(BaseModel):
     consult_reasons: List[str]
     saved_to_history: bool = False
     diet_plan: Optional[Dict[str, Any]] = None
+    allergy_conflicts: List[str] = Field(default_factory=list)
+    can_regenerate: bool = False
 

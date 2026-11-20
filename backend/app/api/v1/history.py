@@ -52,7 +52,10 @@ def list_history(page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le
 
 @router.get("/history/{report_id}", response_model=FullAnalysisResponse)
 def get_report(report_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return _own_report(db, user, report_id).analysis
+    analysis = _own_report(db, user, report_id).analysis
+    from app.engine.allergen_rules import check_saved_report_allergy_conflicts
+    conflicts_info = check_saved_report_allergy_conflicts(analysis)
+    return {**analysis, **conflicts_info}
 
 
 class SavedPlan(BaseModel):

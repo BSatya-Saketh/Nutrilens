@@ -185,3 +185,78 @@ def test_beef_and_pork_completely_removed():
 
     assert "beef" not in INGREDIENTS
     assert "pork" not in INGREDIENTS
+
+
+def test_saved_report_allergy_conflict_detection():
+    """
+    Mentor Requirement:
+    'For previously saved reports, preserve the original lab data. If an old recommendation
+    conflicts with its saved allergy settings, surface the conflict and provide a safe way to regenerate it.'
+    """
+    from app.engine.allergen_rules import check_saved_report_allergy_conflicts
+
+    synthetic_saved_analysis = {
+        "user_profile": {
+            "age": 28,
+            "gender": "female",
+            "diet_type": "veg",
+            "allergens": ["Tree nuts & peanuts"],
+        },
+        "marker_analyses": [
+            {
+                "biomarker_key": "serum_ferritin",
+                "display_name": "Ferritin",
+                "value": 11.2,
+                "unit": "ng/mL",
+                "status": "low",
+                "lab_range_low": 15.0,
+                "lab_range_high": 150.0,
+            }
+        ],
+        "recommendations": [
+            {
+                "target_biomarker": "serum_ferritin",
+                "recommended_foods": [
+                    {
+                        "id": "almonds_badam",
+                        "name": "Almonds (Badam)",
+                        "allergens": ["nuts"],
+                        "preparation_tip": "Soak 5-6 almonds overnight.",
+                    },
+                    {
+                        "id": "palak_spinach",
+                        "name": "Spinach (Palak)",
+                        "allergens": [],
+                        "preparation_tip": "Cook with lemon juice.",
+                    }
+                ]
+            }
+        ],
+        "diet_plan": None
+    }
+
+    conflicts_info = check_saved_report_allergy_conflicts(synthetic_saved_analysis)
+
+    # 1. Surface the conflict
+    assert conflicts_info["can_regenerate"] is True
+    assert len(conflicts_info["allergy_conflicts"]) > 0
+    assert any("Almonds" in c for c in conflicts_info["allergy_conflicts"])
+
+    # 2. Original lab data preserved
+    assert synthetic_saved_analysis["marker_analyses"][0]["value"] == 11.2
+    assert synthetic_saved_analysis["marker_analyses"][0]["lab_range_low"] == 15.0
+
+    # 3. Clean profile with no allergy conflicts
+    clean_analysis = {
+        "user_profile": {"allergens": ["dairy"]},
+        "recommendations": [
+            {
+                "recommended_foods": [
+                    {"id": "palak_spinach", "name": "Spinach", "allergens": []}
+                ]
+            }
+        ]
+    }
+    clean_info = check_saved_report_allergy_conflicts(clean_analysis)
+    assert clean_info["can_regenerate"] is False
+    assert len(clean_info["allergy_conflicts"]) == 0
