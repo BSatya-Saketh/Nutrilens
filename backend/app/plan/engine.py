@@ -31,8 +31,25 @@ MAX_SERVINGS = {"staple": 4, "breakfast": 3, "rice_dish": 2, "dal": 2, "curry": 
                 "side": 2, "snack": 1, "drink": 1, "fruit": 1, "sweet": 1}
 REPEATABLE_ROLES = {"staple", "drink"}  # roles never counted as a "main" dish
 REPEATABLE_DISHES = {"tea", "filter_coffee", "milk", "fortified_milk"}  # may appear at two meals of a day
-ACTIVITY_PAL = {"none": 1.53, "walking": 1.65, "cycling": 1.8, "running": 2.0}  # ICMR-NIN 2020: 1.53 sedentary,
-# 1.8 moderate, 2.3 heavy; walking and running lie between.
+# ICMR-NIN 2020: Physical Activity Level (PAL) for Indian Adults (Table 2.2, page 48):
+# - Sedentary ("none" / desk job / mostly sitting):
+#     Reference Man (65 kg): BMR 1,673 kcal, Energy RDA = 2,110 kcal/day -> PAL = 1.26
+#     Reference Woman (55 kg): BMR 1,280 kcal, Energy RDA = 1,660 kcal/day -> PAL = 1.30
+# - Light active ("walking"): PAL = 1.50 (2,510 kcal for 65 kg male, 1,920 kcal for 55 kg female)
+# - Moderate active ("cycling"): PAL = 1.62 (2,710 kcal for 65 kg male, matching ICMR-NIN moderate RDA)
+# - Heavy active ("running"): PAL = 2.00 (3,350 kcal for 65 kg male, 2,560 kcal for 55 kg female)
+ACTIVITY_PAL = {
+    "none": {"male": 1.26, "female": 1.30},
+    "walking": {"male": 1.50, "female": 1.50},
+    "cycling": {"male": 1.62, "female": 1.66},
+    "running": {"male": 2.00, "female": 2.12},
+}
+
+def get_pal(activity: str, sex: str) -> float:
+    table = ACTIVITY_PAL.get(activity, ACTIVITY_PAL["none"])
+    if isinstance(table, dict):
+        return table.get(sex, table.get("male", 1.26))
+    return float(table)
 DIET_ALLOWS = {"vegan": {"vegan"}, "veg": {"vegan", "vegetarian"}, "vegetarian": {"vegan", "vegetarian"},
                "eggetarian": {"vegan", "vegetarian", "eggetarian"},
                "non_veg": {"vegan", "vegetarian", "eggetarian", "non_veg"}}
@@ -79,7 +96,9 @@ def bmr(person: Person) -> float:
 
 
 def targets(person: Person) -> dict:
-    energy = bmr(person) * ACTIVITY_PAL.get(person.activity, 1.53)
+    pal = get_pal(person.activity, person.sex)
+    bmr_val = bmr(person)
+    energy = bmr_val * pal
     bmi = person.weight_kg / (person.height_cm / 100) ** 2
     if bmi >= 25:  # gentle loss: about 15% below need, never more than 500 kcal
         energy -= min(0.15 * energy, 500)
@@ -92,8 +111,17 @@ def targets(person: Person) -> dict:
            "fibre_g": round(15 * energy / 1000)}  # 30 g per 2000 kcal
     low = {REPORT_KEYS[k] for k in person.low_nutrients if k in REPORT_KEYS}
     sodium = 1500 if "hypertension" in person.conditions else 2000
-    return {"energy_kcal": round(energy), "protein_g": round(0.83 * person.weight_kg, 1), "rda": rda,
-            "low": sorted(low), "sodium_mg": sodium, "bmi": round(bmi, 1)}
+    return {
+        "energy_kcal": round(energy),
+        "bmr_kcal": round(bmr_val, 1),
+        "pal": pal,
+        "protein_g": round(0.83 * person.weight_kg, 1),
+        "rda": rda,
+        "low": sorted(low),
+        "sodium_mg": sodium,
+        "bmi": round(bmi, 1),
+        "standards_source": "ICMR-NIN (2020) Recommended Dietary Allowances for Indians, Table 2.2 & Chapter 3.",
+    }
 
 
 # ----------------------------------------------------------------------------------------------- dishes
@@ -146,8 +174,10 @@ def food_codes(food_id: str) -> set:
 
 def eligible(person: Person) -> list:
     """Dishes this person can eat: diet, kinds of meat, allergens and words to avoid."""
+    from app.engine.allergen_rules import normalize_allergens, is_dish_allergen_free
     allowed = DIET_ALLOWS.get(person.diet, DIET_ALLOWS["veg"])
-    allergens, words = set(person.allergens), [w.strip().lower() for w in person.avoid_words if w.strip()]
+    allergens = normalize_allergens(person.allergens)
+    words = [w.strip().lower() for w in person.avoid_words if w.strip()]
     meats = set(person.meats)
     if meats:
         meats.add("egg") if "egg" in meats else None
@@ -160,7 +190,7 @@ def eligible(person: Person) -> list:
             blocked |= set(embed.match_items(word, "ingredient"))
     out = []
     for d in catalog().values():
-        if d["diet"] not in allowed or set(d["allergens"]) & allergens:
+        if d["diet"] not in allowed or not is_dish_allergen_free(d, allergens):
             continue
         if meats and set(d["meat_types"]) - meats:
             continue
@@ -234,11 +264,16 @@ def solve_day(person: Person, dishes: list, request: DayRequest):
     solver.Add(count("breakfast", ("chutney",)) <= 1)
     solver.Add(count("breakfast", ("drink",)) <= 1)
     solver.Add(count("breakfast", ("fruit",)) <= 1)
+    extra_starches = []
     for slot in ("lunch", "dinner"):
         bread, rd, bf = count(slot, ("staple",)), count(slot, ("rice_dish",)), count(slot, ("breakfast",))
         solver.Add(rd + bf <= 1)
         solver.Add(bread <= 2 - 2 * (rd + bf))
         solver.Add(bread + rd + bf >= 1)
+        # Avoid stacking multiple starches unless strictly required for RDA targets
+        extra_starch = solver.NumVar(0, 1, "")
+        solver.Add(bread - extra_starch <= 1)
+        extra_starches.append(extra_starch)
         staple_n = [n[k] for k in n if k[1] == slot and by_id[k[0]]["role"] == "staple"]
         solver.Add(solver.Sum(staple_n) <= 4)
         solver.Add(solver.Sum([n[k] for k in n if k[1] == slot and by_id[k[0]]["role"] == "staple"
@@ -286,12 +321,12 @@ def solve_day(person: Person, dishes: list, request: DayRequest):
     solver.Add(sodium <= t["sodium_mg"] + 1500)
 
     cost = [50 * protein_short / max(t["protein_g"], 1), 20 * fat_excess / 100, 20 * sat_excess / 100,
-            (40 if "hypertension" in person.conditions else 15) * sodium_excess / 1000]
+            (40 if "hypertension" in person.conditions else 15) * sodium_excess / 1000] + [3.0 * s for s in extra_starches]
     for key, rda in t["rda"].items():
         short = solver.NumVar(0, rda, "")
         solver.Add(total(key, credit=True) + short >= rda)
         low = key in t["low"]
-        weight = 60 if low else (12 if request.style == "nutritious" else 4)
+        weight = 120 if low else (12 if request.style == "nutritious" else 4)
         cost.append(weight * short / rda)
 
     picked = [food_codes(f) for f in person.picked_foods]
@@ -363,8 +398,37 @@ def describe_day(chosen: dict, by_id: dict, t: dict) -> dict:
             totals[key] += servings * (value or 0)
     totals = {k: round(v, 1) for k, v in totals.items()}
     met = {k: totals.get(k, 0) >= rda for k, rda in t["rda"].items()}
-    return {"meals": meals, "totals": totals, "targets": t, "rda_met": met,
-            "salt_g": round(totals.get("sodium_mg", 0) * 2.54 / 1000, 1)}
+
+    # Transparent accounting of any shortfalls for flagged low nutrients
+    shortfalls = {}
+    for k in t.get("low", []):
+        actual = totals.get(k, 0)
+        needed = t["rda"].get(k, 0)
+        if actual < needed:
+            pct = round((actual / needed) * 100, 1) if needed > 0 else 0
+            note = (
+                f"Diet provides {actual} IU of the {needed} IU target ({pct}% met). "
+                "Natural food sources alone rarely meet the daily Vitamin D RDA without safe midday sun exposure or clinical supplementation."
+                if k in ("vitamin_d_iu", "vitamin_d")
+                else f"Diet provides {actual} of the {needed} target ({pct}% met). Discuss with your physician if dietary intake remains insufficient."
+            )
+            shortfalls[k] = {
+                "actual": actual,
+                "target": needed,
+                "pct_met": pct,
+                "shortfall": round(needed - actual, 1),
+                "note": note,
+            }
+
+    return {
+        "meals": meals,
+        "totals": totals,
+        "targets": t,
+        "rda_met": met,
+        "shortfalls": shortfalls,
+        "salt_g": round(totals.get("sodium_mg", 0) * 2.54 / 1000, 1),
+        "sodium_limit_mg": t.get("sodium_mg", 2000),
+    }
 
 
 # ----------------------------------------------------------------------------------------------- plans

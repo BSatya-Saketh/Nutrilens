@@ -70,6 +70,10 @@ class MarkerAnalysisResult(BaseModel):
     percentage_of_optimal: float
     clinical_warning: Optional[str] = None
     target_nutrient_key: str
+    lab_range_low: Optional[float] = None
+    lab_range_high: Optional[float] = None
+    guideline_threshold: Optional[str] = None
+    guideline_source: Optional[str] = None
 
 class FoodRecommendation(BaseModel):
     id: str

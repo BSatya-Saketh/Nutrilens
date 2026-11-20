@@ -113,9 +113,9 @@ const STRINGS = {
   pickedSome: { en: 'foods you picked will be included.', hi: 'चुने गए खाद्य शामिल किए जाएँगे।', te: 'మీరు ఎంచుకున్న ఆహారాలు చేర్చబడతాయి.' },
   pickHint: { en: 'Tick foods above to include them in your plan.', hi: 'योजना में शामिल करने के लिए ऊपर खाद्य चुनें।', te: 'ప్రణాళికలో చేర్చడానికి పైన ఆహారాలను ఎంచుకోండి.' },
   planPromise: {
-    en: 'Plans meet your calorie and protein needs and the nutrients this report shows as low.',
-    hi: 'योजनाएँ आपकी कैलोरी, प्रोटीन और रिपोर्ट में कम पाए गए पोषक तत्वों की ज़रूरत पूरी करती हैं।',
-    te: 'ప్రణాళికలు మీ కేలరీలు, ప్రోటీన్, రిపోర్టులో తక్కువగా ఉన్న పోషకాల అవసరాన్ని తీరుస్తాయి.',
+    en: 'Plans are built using ICMR-NIN 2020 guidelines for your age, sex, and activity. Target vs. actual intakes and any dietary shortfalls are clearly reported.',
+    hi: 'योजनाएँ आपकी उम्र, लिंग और गतिविधि के लिए ICMR-NIN 2020 दिशानिर्देशों के अनुसार बनाई गई हैं। लक्ष्य बनाम वास्तविक सेवन और पोषण की कमी स्पष्ट रूप से दिखाई जाती है।',
+    te: 'ప్రణాళికలు మీ వయస్సు, లింగం మరియు శారీరక శ్రమ కోసం ICMR-NIN 2020 మార్గదర్శకాల ప్రకారం రూపొందించబడ్డాయి. లక్ష్యాలు మరియు వాస్తవ పోషకాలు స్పష్టంగా చూపబడతాయి.',
   },
   adultsOnly: { en: 'Diet plans are for adults aged 18 and over.', hi: 'आहार योजनाएँ 18 वर्ष और उससे अधिक उम्र के लिए हैं।', te: 'ఆహార ప్రణాళికలు 18 ఏళ్లు పైబడిన వారికి మాత్రమే.' },
   neededForCalories: { en: 'Needed to work out your daily calories.', hi: 'आपकी रोज़ की कैलोरी निकालने के लिए ज़रूरी।', te: 'మీ రోజువారీ కేలరీలు లెక్కించడానికి అవసరం.' },

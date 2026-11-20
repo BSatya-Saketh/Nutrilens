@@ -3,6 +3,7 @@ import re
 import os
 from typing import List, Dict, Any, Optional
 from app.engine.rule_engine import BIOMARKERS_CONFIG
+from app.engine.allergen_rules import normalize_allergens, sanitize_tip_text
 from app.models.schemas import (
     UserProfile,
     MarkerAnalysisResult,
@@ -168,12 +169,12 @@ class RecommendationEngine:
     def filter_foods(self, profile: UserProfile) -> List[Dict[str, Any]]:
         """Applies hard constraints for diet type and allergens."""
         eligible_foods = []
-        user_allergens = {a.strip().lower() for a in profile.allergens}
-        user_diet = profile.diet_type.value
+        user_allergens = normalize_allergens(profile.allergens)
+        user_diet = profile.diet_type.value if hasattr(profile.diet_type, "value") else str(profile.diet_type)
 
         for food in self.foods_db:
             # 1. Allergen Check: Strict zero tolerance
-            food_allergens = {a.lower() for a in food.get("allergens", [])}
+            food_allergens = normalize_allergens(food.get("allergens", []))
             if user_allergens.intersection(food_allergens):
                 continue  # Disqualified due to allergen
 
@@ -295,8 +296,11 @@ class RecommendationEngine:
                     )
                 )
 
-            # Get absorption guidelines
+            # Get absorption guidelines (sanitized for user's allergens and diet)
             rules = ABSORPTION_RULES.get(nutrient_key, {"dos": [], "donts": []})
+            diet_val = profile.diet_type.value if hasattr(profile.diet_type, "value") else str(profile.diet_type)
+            clean_dos = [sanitize_tip_text(d, profile.allergens, diet_val) for d in rules.get("dos", [])]
+            clean_donts = [sanitize_tip_text(d, profile.allergens, diet_val) for d in rules.get("donts", [])]
 
             plans.append(
                 NutrientRecommendationPlan(
@@ -304,8 +308,8 @@ class RecommendationEngine:
                     biomarker_display_name=marker.display_name,
                     status=marker.status,
                     recommended_foods=formatted_foods,
-                    absorption_dos=rules.get("dos", []),
-                    absorption_donts=rules.get("donts", []),
+                    absorption_dos=clean_dos,
+                    absorption_donts=clean_donts,
                     purpose=purpose,
                 )
             )

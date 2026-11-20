@@ -99,17 +99,33 @@ export const RangeSliderBar: React.FC<RangeSliderBarProps> = ({ analysis }) => {
         </div>
       </div>
 
-      <p className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-        <span>
-          Healthy range{' '}
-          <span className="font-medium text-slate-700 tabular-nums">
-            {range_low}–{range_high} {unit}
+      <div className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <div className="flex items-center justify-between">
+          <span>
+            Lab reference interval:{' '}
+            <span className="font-medium text-slate-700 tabular-nums">
+              {(analysis.lab_range_low !== undefined && analysis.lab_range_low !== null ? analysis.lab_range_low : range_low)}–
+              {(analysis.lab_range_high !== undefined && analysis.lab_range_high !== null ? analysis.lab_range_high : range_high)} {unit}
+            </span>
           </span>
-        </span>
-        <span>
-          <span className="font-semibold text-slate-700 tabular-nums">{percentage_of_optimal}%</span> of optimal
-        </span>
-      </p>
+          <span>
+            <span className="font-semibold text-slate-700 tabular-nums">{percentage_of_optimal}%</span> of optimal
+          </span>
+        </div>
+        {analysis.guideline_threshold && (
+          <div className="mt-2 flex items-center justify-between rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+            <span>
+              Clinical Guideline Target:{' '}
+              <span className="font-semibold text-slate-800">{analysis.guideline_threshold}</span>
+            </span>
+            {analysis.guideline_source && (
+              <span className="text-[10px] text-slate-500 italic truncate max-w-[220px]" title={analysis.guideline_source}>
+                {analysis.guideline_source}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       {clinical_warning && (
         <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">

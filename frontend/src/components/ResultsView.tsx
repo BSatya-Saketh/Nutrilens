@@ -45,6 +45,19 @@ const SUMMARY_CARDS = [
   { key: 'high', label: 'Elevated', hint: 'Above healthy range', status: 'high' },
 ] as const;
 
+const ALLERGEN_STEMS: Record<string, string[]> = {
+  nuts: ['almond', 'walnut', 'cashew', 'pistachio', 'peanut', 'groundnut', 'badam', 'kaju', 'pista', 'nut'],
+  peanuts: ['peanut', 'groundnut', 'moongphali', 'verusenagapappu'],
+  tree_nuts: ['almond', 'walnut', 'cashew', 'pistachio', 'badam', 'kaju', 'pista'],
+  dairy: ['milk', 'curd', 'yogurt', 'paneer', 'cheese', 'ghee', 'butter', 'cream', 'dahi'],
+  gluten: ['wheat', 'maida', 'atta', 'roti', 'chapati', 'bread', 'semolina', 'suji'],
+  soy: ['soy', 'soya', 'tofu'],
+  sesame: ['sesame', 'til', 'nuvvulu'],
+  mustard: ['mustard', 'sarson', 'rai', 'aavalu'],
+  eggs: ['egg', 'anda', 'guddu'],
+  seafood: ['fish', 'prawn', 'shrimp', 'crab', 'mackerel', 'rohu', 'chepa'],
+};
+
 export const ResultsView: React.FC<ResultsViewProps> = ({
   result: source,
   profile,
@@ -119,6 +132,29 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const improvePlans = result.recommendations.filter((p) => (p.purpose ?? 'improve') === 'improve');
   const maintainPlans = result.recommendations.filter((p) => p.purpose === 'maintain');
 
+  // Surface any conflicts between saved recommendations and the active allergy profile
+  const allergenConflicts = React.useMemo(() => {
+    if (!profile.allergens?.length) return [];
+    const normalized = profile.allergens.flatMap((a) => (a === 'nuts' ? ['tree_nuts', 'peanuts', 'nuts'] : [a]));
+    const stems = new Set<string>();
+    for (const a of normalized) {
+      for (const s of ALLERGEN_STEMS[a] || [a]) stems.add(s.toLowerCase());
+    }
+    const conflicts: string[] = [];
+    for (const plan of result.recommendations) {
+      for (const f of plan.recommended_foods) {
+        const text = `${f.name} ${f.hindi_name || ''} ${f.preparation_tip || ''}`.toLowerCase();
+        for (const s of stems) {
+          if (text.includes(s)) {
+            conflicts.push(`"${f.name}" matches excluded allergen (${s})`);
+            break;
+          }
+        }
+      }
+    }
+    return conflicts;
+  }, [profile.allergens, result.recommendations]);
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
@@ -168,6 +204,36 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           </Button>
         </div>
       </div>
+
+      {allergenConflicts.length > 0 && (
+        <Alert tone="warning" title="Allergy Setting Conflict Detected in Saved Plan">
+          <div className="space-y-2">
+            <p className="text-sm">
+              This saved recommendation contains food items that conflict with your current allergy profile:
+            </p>
+            <ul className="list-disc pl-5 text-xs space-y-0.5">
+              {allergenConflicts.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-600">
+              Your original lab results and reference intervals remain preserved. You can safely regenerate this nutrition plan with strictly verified allergen exclusions.
+            </p>
+            <div className="pt-1">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setRebuildToken((n) => n + 1);
+                  openTab('plan');
+                }}
+              >
+                Regenerate Safe Plan
+              </Button>
+            </div>
+          </div>
+        </Alert>
+      )}
 
       {/* Health score: a light card in the site's colours (the PDF uses the same design) */}
       <Card className="overflow-hidden p-5 shadow-card sm:p-6">

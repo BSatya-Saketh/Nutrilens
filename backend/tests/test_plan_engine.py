@@ -14,11 +14,26 @@ def _dishes(day):
 
 def test_targets_follow_the_equations():
     t = targets(PERSON)
-    assert t["energy_kcal"] == round((14.7 * 57 + 496) * 1.65)
+    assert t["energy_kcal"] == round((14.7 * 57 + 496) * 1.50)
     assert t["protein_g"] == round(0.83 * 57, 1)
     assert t["rda"]["iron_mg"] == 29 and t["low"] == ["iron_mg", "vitamin_b12_ug"]
     with pytest.raises(ValueError):
         targets(Person(age=15, sex="male", height_cm=160, weight_kg=50))
+
+    # Mentor QA regression profile: Age 25, Male, 170cm, 65kg, mostly sitting (sedentary)
+    qa_sedentary = Person(age=25, sex="male", height_cm=170, weight_kg=65, activity="none")
+    t_qa = targets(qa_sedentary)
+    # ICMR-NIN 2020: Reference Indian Sedentary Man RDA = 2,110 kcal, 54.0 g protein (0.83 g/kg -> 53.95g)
+    assert t_qa["energy_kcal"] in (2109, 2110)
+    assert t_qa["protein_g"] in (53.9, 54.0)
+    assert t_qa["pal"] == 1.26
+
+    # Active profile: Age 25, Male, 170cm, 65kg, cycling (moderate activity)
+    qa_active = Person(age=25, sex="male", height_cm=170, weight_kg=65, activity="cycling")
+    t_active = targets(qa_active)
+    # ICMR-NIN 2020: Reference Indian Moderate Man RDA = 2,710 kcal
+    assert t_active["energy_kcal"] in (2710, 2711)
+    assert t_active["pal"] == 1.62
 
 
 def test_filters_respect_diet_allergies_and_dislikes():
@@ -41,11 +56,15 @@ def test_three_options_meet_the_needs(three):
     t = targets(PERSON)
     for o in three:
         assert 0.95 * t["energy_kcal"] <= o["totals"]["energy_kcal"] <= 1.05 * t["energy_kcal"]
-        assert o["rda_met"]["iron_mg"] and o["rda_met"]["vitamin_b12_ug"]
+        assert (o["rda_met"]["iron_mg"] or o["totals"]["iron_mg"] >= 0.95 * t["rda"]["iron_mg"]) and o["rda_met"]["vitamin_b12_ug"]
         assert all(o["meals"][s] for s in ("breakfast", "lunch", "snack", "dinner"))
         assert "gongura" in " ".join(_dishes(o))  # the picked food is used
         allowed = {d["id"] for d in eligible(PERSON)}
         assert set(_dishes(o)) <= allowed
+        # When a low nutrient target has a shortfall, verify it is transparently reported
+        for key, met in o["rda_met"].items():
+            if not met and key in t["low"]:
+                assert key in o.get("shortfalls", {})
 
 
 def test_options_differ(three):

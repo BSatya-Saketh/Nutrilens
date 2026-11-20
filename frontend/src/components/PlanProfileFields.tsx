@@ -46,7 +46,7 @@ const ACTIVITIES: { id: Activity; icon: React.ReactNode }[] = [
   { id: 'running', icon: <Zap className="h-4 w-4" aria-hidden /> },
 ];
 
-const MEATS = ['chicken', 'mutton', 'fish', 'shellfish', 'egg', 'beef', 'pork'];
+const MEATS = ['chicken', 'mutton', 'fish', 'shellfish', 'egg'];
 
 type Setter = React.Dispatch<React.SetStateAction<UserProfile>>;
 

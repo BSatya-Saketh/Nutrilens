@@ -95,6 +95,15 @@ def plan_swap(request: SwapRequest):
     return {"day": day}
 
 
+class ShoppingListRequest(BaseModel):
+    days: List[dict] = Field(min_length=1, max_length=7)
+
+
+@router.post("/diet-plan/shopping-list")
+def plan_shopping_list(request: ShoppingListRequest):
+    return {"shopping_list": engine.shopping_list(request.days)}
+
+
 class PdfRequest(BaseModel):
     days: list = Field(min_length=1, max_length=7)
     shopping_list: list = Field(default_factory=list, max_length=300)

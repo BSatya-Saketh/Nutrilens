@@ -48,7 +48,9 @@ export interface PlanDay {
   totals: Record<string, number>;
   targets: PlanTargets;
   rda_met: Record<string, boolean>;
+  shortfalls?: Record<string, { actual: number; target: number; pct_met: number; shortfall: number; note: string }>;
   salt_g: number;
+  sodium_limit_mg?: number;
   style?: PlanStyle;
   title?: string;
 }
@@ -110,6 +112,10 @@ export interface MarkerAnalysisResult {
   percentage_of_optimal: number;
   clinical_warning?: string | null;
   target_nutrient_key: string;
+  lab_range_low?: number | null;
+  lab_range_high?: number | null;
+  guideline_threshold?: string | null;
+  guideline_source?: string | null;
 }
 
 export interface FoodRecommendation {

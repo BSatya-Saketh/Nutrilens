@@ -1,6 +1,6 @@
 import React from 'react';
-import { ArrowLeft, BookmarkCheck, CalendarDays, Check, Download, Loader2, RefreshCw, ShoppingBasket, Sparkles } from 'lucide-react';
-import { downloadDietPlanPdf, planOptions, planSwap, planWeek, PlanInput, PlanMarker, saveDietPlan } from '../services/api';
+import { AlertTriangle, ArrowLeft, BookmarkCheck, CalendarDays, Check, Download, Loader2, RefreshCw, ShoppingBasket, Sparkles } from 'lucide-react';
+import { downloadDietPlanPdf, getShoppingList, planOptions, planSwap, planWeek, PlanInput, PlanMarker, saveDietPlan } from '../services/api';
 import { FullAnalysisResponse, MealSlot, PlanDay, PlanStyle, ShoppingItem, UserProfile } from '../types';
 import { Alert, Badge, Button, Card, cx } from './ui';
 import { localizeWords, StringKey, useLanguage, useT } from '../lib/i18n';
@@ -68,17 +68,35 @@ const Totals: React.FC<{ day: PlanDay }> = ({ day }) => {
   const tr = useT();
   const t = day.targets;
   const watched = t.low.length ? t.low : ['iron_mg', 'calcium_mg'];
+  const hasShortfalls = day.shortfalls && Object.keys(day.shortfalls).length > 0;
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <Stat label={tr('calories')} value={`${fmt(day.totals.energy_kcal)} kcal`} hint={`${tr('target')} ${fmt(t.energy_kcal)}`} />
-      <Stat label={tr('protein')} value={`${fmt(day.totals.protein_g)} g`} hint={`${tr('target')} ${fmt(t.protein_g)} g`} />
-      {watched.slice(0, 2).map((key) => {
-        const unit = UNITS[key] ?? '';
-        return (
-          <Stat key={key} label={tr(`nut_${key}` as StringKey)} value={`${fmt(day.totals[key] ?? 0)} ${unit}`} hint={`${tr('need')} ${fmt(t.rda[key])} ${unit}`}
-            good={day.rda_met[key]} />
-        );
-      })}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label={tr('calories')} value={`${fmt(day.totals.energy_kcal)} kcal`} hint={`${tr('target')} ${fmt(t.energy_kcal)}`} />
+        <Stat label={tr('protein')} value={`${fmt(day.totals.protein_g)} g`} hint={`${tr('target')} ${fmt(t.protein_g)} g`} />
+        {watched.slice(0, 2).map((key) => {
+          const unit = UNITS[key] ?? '';
+          return (
+            <Stat key={key} label={tr(`nut_${key}` as StringKey)} value={`${fmt(day.totals[key] ?? 0)} ${unit}`} hint={`${tr('need')} ${fmt(t.rda[key])} ${unit}`}
+              good={day.rda_met[key]} />
+          );
+        })}
+      </div>
+      {hasShortfalls && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900">
+          <div className="flex items-center gap-1.5 font-semibold text-amber-950">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" aria-hidden />
+            <span>Target vs. Actual Intake Accounting</span>
+          </div>
+          <div className="mt-1.5 space-y-1">
+            {Object.entries(day.shortfalls!).map(([key, item]) => (
+              <p key={key} className="leading-relaxed">
+                • <span className="font-semibold">{key.replace('_', ' ').toUpperCase()}:</span> {item.note}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -179,7 +197,13 @@ export const PlanBuilder: React.FC<{
 
   const swap = (slot: MealSlot, dishId: string) => week && run(`${slot}:${dishId}`, async () => {
     const r = await planSwap(input(week.style), week.days[dayIndex], slot, dishId);
-    setWeek({ ...week, days: week.days.map((d, i) => (i === dayIndex ? r.day : d)) });
+    const newDays = week.days.map((d, i) => (i === dayIndex ? r.day : d));
+    try {
+      const shopRes = await getShoppingList(newDays);
+      setWeek({ ...week, days: newDays, shopping: shopRes.shopping_list });
+    } catch {
+      setWeek({ ...week, days: newDays });
+    }
     setSaved(false);
   });
 
