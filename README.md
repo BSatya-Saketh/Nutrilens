@@ -10,9 +10,9 @@ AI & Clinical Biomarker Intelligence System
 
 ### The 4 Core Pillars
 1. **Report Intelligence:** Dual-layer extraction (`pdfplumber` layout-aware extraction + Gemini Flash structured JSON fallback) paired with local **PII de-identification** and a **Human-in-the-Loop Confirmation Screen**.
-2. **Biomarker Intelligence:** Strict unit normalization (e.g., `ng/mL` vs `nmol/L`, `pg/mL` vs `pmol/L`) and deterministic classification prioritizing the laboratory's printed reference range.
-3. **Nutrition Intelligence:** 65+ hand-curated Indian food items cross-referenced with ICMR-NIN nutritional composition and absorption synergy/inhibitor rules (e.g., Vitamin C + Iron absorption, Calcium/Tannin inhibition).
-4. **Personalization & Safety Guardrails:** Hard constraint satisfaction for dietary types (`Vegetarian`, `Vegan`, `Eggetarian`, `Non-Vegetarian`) and allergens (`Dairy`, `Gluten`, `Nuts`, `Soy`, `Eggs`, `Seafood`). Severely low readings trigger clinical consult advisories.
+2. **Biomarker Intelligence & Lab Interval Preservation:** Strict unit normalization (e.g., `ng/mL` vs `nmol/L`, `pg/mL` vs `pmol/L`) and deterministic classification that **strictly preserves the reporting laboratory's reference range** without silent overwrite. Separate clinical guideline thresholds (e.g., Lipid Association of India / NCEP ATP III for LDL $<100$ mg/dL; ICMR/ADA for HbA1c and glucose) are distinctly badged with source citations.
+3. **Nutrition Intelligence & Regional Meal Planner:** Google OR-Tools constraint solver generating balanced regional Indian meal plans (Familiar, Most Nutritious, Regional) parameterized with **ICMR-NIN (2020) Dietary Guidelines**. Features realistic household portions, starch-stacking prevention, transparent shortfall accounting (reporting actual intake vs. target for low nutrients such as Vitamin D), and dynamic dish swaps that rebuild the shopping list.
+4. **Personalization & Zero-Tolerance Allergen Guardrails:** Hard constraint satisfaction for dietary types (`Vegetarian`, `Vegan`, `Eggetarian`, `Non-Vegetarian` with **total elimination of beef and pork**) and allergens (`Dairy`, `Gluten`, `Nuts / Tree nuts & Peanuts`, `Soy`, `Eggs`, `Seafood`, `Mustard`, `Sesame`). Allergen exclusions are strictly enforced across recipes, garnishes, cooking ingredients, swaps, shopping lists, and free-text tips. Historic saved reports actively flag conflicts with active allergy profiles and provide safe regeneration.
 
 ---
 
@@ -21,10 +21,14 @@ AI & Clinical Biomarker Intelligence System
 ```
 ┌────────────────────────────────────────────────────────┐
 │     Client UI (React 19 + Vite + Tailwind CSS)         │
-│  • Drag & Drop PDF Ingestion                           │
+│  • Drag & Drop PDF Ingestion & OCR Preview             │
 │  • Human-in-the-Loop Verification Table                │
-│  • InsideTracker-style Visual Range Gauges             │
-│  • ZOE-style Food Cards & Synergy Tips                 │
+│  • Range Gauges with Preserved Lab Intervals           │
+│  • Clinical Guideline Badges (LAI / ICMR / ADA)        │
+│  • Regional Meal Planner (Familiar, Nutritious, Region)│
+│  • Dish Swap & Dynamic Shopping List Sync              │
+│  • Target vs. Intake Shortfall Accounting              │
+│  • Saved Report Allergen Conflict Detection Banner     │
 └───────────────────────────┬────────────────────────────┘
                             │ REST API / Multipart
                             ▼
@@ -39,14 +43,18 @@ AI & Clinical Biomarker Intelligence System
 │                                                        │
 │  2. Biomarker Intelligence Engine                      │
 │     • Unit Normalization (Canonical conversions)       │
-│     • Range Resolution (Report Range > Demographics)   │
+│     • Lab Range Preservation (Report Range intact)     │
+│     • Guideline Threshold Evaluation (LAI, ADA, ICMR)  │
 │     • Status Classifier (Low | Borderline | Normal)    │
 │                                                        │
-│  3. Nutrition Recommendation Engine                    │
-│     • Hard Filter: Diet Category (Veg/Vegan/Non-Veg)   │
-│     • Hard Filter: Allergen Exclusion (Zero-tolerance) │
-│     • Ranking: ICMR-NIN Nutrient Density per serving   │
-│     • Synergy Injector (Absorption Dos & Don'ts)       │
+│  3. Nutrition & Meal Planning Engine (OR-Tools)        │
+│     • ICMR-NIN 2020 Energy (Schofield) & PAL Mapping   │
+│     • Protein RDA (0.83 g/kg body weight)              │
+│     • Deep Allergen Validator (Tree nuts & peanuts)    │
+│     • Starch-Stacking Penalty & Realistic Portions     │
+│     • Dish Swap Mechanics & Shopping List Rebuilder    │
+│     • Transparent Shortfall Reporter (e.g. Vitamin D)  │
+│     • Absorption Tip Sanitizer (Zero text leak)        │
 │                                                        │
 │  4. Delivery & Export Layer                            │
 │     • Deterministic Grounded Narrative Generator       │
@@ -120,8 +128,13 @@ Backend tests always use a throwaway in-memory database, never the real one.
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `POST` | `/api/v1/extract-report` | Anyone | Upload PDF/image or paste text; scrubs PII and extracts biomarkers. |
-| `POST` | `/api/v1/analyze-and-recommend` | Anyone | Returns the personalised plan. **Saved to history only when signed in.** |
-| `POST` | `/api/v1/export-plan-pdf` | Anyone | Renders the supplied analysis as a PDF; never reads stored reports. |
+| `POST` | `/api/v1/analyze-and-recommend` | Anyone | Returns personalized nutrition plan and preserved biomarker intervals. |
+| `POST` | `/api/v1/diet-plan/options` | Anyone | Computes 3 personalized daily meal options (Familiar, Nutritious, Regional) via OR-Tools. |
+| `POST` | `/api/v1/diet-plan/week` | Anyone | Solves a balanced 7-day regional meal plan and generates aggregated shopping list. |
+| `POST` | `/api/v1/diet-plan/swap` | Anyone | Replaces a dish, revalidates constraints, updates nutrient totals and shortfalls. |
+| `POST` | `/api/v1/diet-plan/shopping-list` | Anyone | Rebuilds purchase-weight shopping list dynamically from updated meal plans. |
+| `POST` | `/api/v1/diet-plan/pdf` | Anyone | Generates a branded A4 PDF of the 7-day meal plan and categorized shopping list. |
+| `POST` | `/api/v1/export-plan-pdf` | Anyone | Renders biomarker review and dietary advice as a comprehensive medical PDF. |
 | `POST` | `/api/v1/auth/register` · `/login` · `/logout` | Anyone | Account sign-up and sessions (HttpOnly cookie). |
 | `GET` | `/api/v1/auth/session` · `/auth/me` | Anyone / signed in | Who is signed in. |
 | `PATCH`/`POST` | `/api/v1/auth/me` · `/change-password` · `/delete-account` | Signed in | Self-service account management. |
@@ -131,6 +144,44 @@ Backend tests always use a throwaway in-memory database, never the real one.
 | `POST`/`DELETE` | `/api/v1/admin/access…` · `/admin/transfer-ownership` | Owner | Grant/remove admin access, hand over ownership. |
 | `GET` | `/api/health` | Anyone | Health check (never touches the database). |
 | `GET` | `/docs` | Anyone | Interactive Swagger UI. |
+
+---
+
+## 📐 Clinical Guidelines & ICMR-NIN (2020) Reference Standards
+
+NutriLens grounds all nutritional targets and biomarker evaluations in verified authoritative standards:
+
+### 1. Energy Requirements & Physical Activity Levels (PAL)
+Energy targets are derived from **ICMR-NIN (2020) Recommended Dietary Allowances for Indians** (Chapter 2 & Table 2.2):
+- **Basal Metabolic Rate (BMR):** FAO/WHO/UNU (Schofield) equations adopted by ICMR-NIN:
+  - Adult Male (18–29 y): $\text{BMR} = 15.3 \times \text{Weight (kg)} + 679\text{ kcal/day}$
+  - Adult Female (18–29 y): $\text{BMR} = 14.7 \times \text{Weight (kg)} + 496\text{ kcal/day}$
+  - Adult Male (30–59 y): $\text{BMR} = 11.6 \times \text{Weight (kg)} + 879\text{ kcal/day}$
+  - Adult Female (30–59 y): $\text{BMR} = 8.7 \times \text{Weight (kg)} + 829\text{ kcal/day}$
+- **Activity Factor Mapping:**
+  - **Sedentary (`"none"` / desk job / mostly sitting):** $\text{PAL} = 1.26$ (Male), $1.30$ (Female)  
+    *(Matches ICMR-NIN Reference Indian Sedentary Man 65 kg $\rightarrow 2,110\text{ kcal/day}$ and Woman 55 kg $\rightarrow 1,660\text{ kcal/day}$)*
+  - **Light Active (`"walking"`):** $\text{PAL} = 1.50$
+  - **Moderate Active (`"cycling"`):** $\text{PAL} = 1.62$ (Male $\rightarrow 2,710\text{ kcal/day}$), $1.66$ (Female $\rightarrow 2,130\text{ kcal/day}$)
+  - **Heavy Active (`"running"`):** $\text{PAL} = 2.00$ (Male $\rightarrow 3,350\text{ kcal/day}$), $2.12$ (Female $\rightarrow 2,560\text{ kcal/day}$)
+
+### 2. Protein Target
+- **Adult Protein RDA:** $0.83\text{ g per kg body weight per day}$ per ICMR-NIN 2020 (Reference Man 65 kg $\rightarrow 54.0\text{ g/day}$).
+
+### 3. Preserved Lab Intervals vs. Clinical Guideline Thresholds
+- **Reporting Lab Range:** Always preserved intact across all screens, history, and PDF exports.
+- **Lipid Targets:** Evaluated against **Lipid Association of India (LAI 2020)** & NCEP ATP III:
+  - LDL Cholesterol: Optimal $<100\text{ mg/dL}$, Borderline $100\text{--}159\text{ mg/dL}$, High $\ge 160\text{ mg/dL}$.
+  - Total Cholesterol: Normal $<200\text{ mg/dL}$, Borderline $200\text{--}239\text{ mg/dL}$, High $\ge 240\text{ mg/dL}$.
+  - Triglycerides: Normal $<150\text{ mg/dL}$, Borderline $150\text{--}199\text{ mg/dL}$, High $\ge 200\text{ mg/dL}$.
+- **Glycemic Markers:** Evaluated against **ICMR Guidelines for Type 2 Diabetes (2023)** & ADA (2024):
+  - Fasting Glucose: Normal $<100\text{ mg/dL}$, Impaired $100\text{--}125\text{ mg/dL}$, Diabetic $\ge 126\text{ mg/dL}$.
+  - HbA1c: Normal $<5.7\%$, Prediabetic $5.7\text{--}6.4\%$, Diabetic $\ge 6.5\%$.
+
+### 4. Transparent Shortfall Accounting
+Natural whole-food Indian vegetarian diets rarely meet the $600\text{ IU}$ Vitamin D RDA solely through food (providing $\sim 42\text{--}127\text{ IU}$). NutriLens transparently reports actual intake vs. target and explicitly displays the shortfall with clinical guidance for safe sunlight exposure or medical supplementation, replacing unrealistic blanket claims.
+
+---
 
 ---
 
