@@ -83,8 +83,6 @@ const STRINGS = {
   meat_fish: { en: 'Fish', hi: 'मछली', te: 'చేపలు' },
   meat_shellfish: { en: 'Prawns & crab', hi: 'झींगा और केकड़ा', te: 'రొయ్యలు, పీతలు' },
   meat_egg: { en: 'Eggs', hi: 'अंडे', te: 'గుడ్లు' },
-  meat_beef: { en: 'Beef', hi: 'बीफ़', te: 'బీఫ్' },
-  meat_pork: { en: 'Pork', hi: 'पोर्क', te: 'పోర్క్' },
   customAllergy: { en: 'Allergic to something else? Add it here', hi: 'किसी और चीज़ से एलर्जी है? यहाँ जोड़ें', te: 'ఇంకేదైనా పడదా? ఇక్కడ చేర్చండి' },
   customAllergyHint: {
     en: 'For example brinjal, mushroom or prawns. We leave out every dish that contains it.',
