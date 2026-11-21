@@ -9,7 +9,7 @@ from app.utils.diet_plan_pdf import generate_diet_plan_pdf
 
 router = APIRouter()
 
-Activity = Literal["none", "walking", "cycling", "running"]
+Activity = Literal["none", "walking", "cycling", "running", "light", "moderate", "daily", "intense", "very_intense"]
 Style = Literal["familiar", "nutritious", "regional"]
 Slot = Literal["breakfast", "lunch", "snack", "dinner"]
 GLUCOSE_MARKERS = {"hba1c", "fasting_glucose", "postprandial_glucose"}

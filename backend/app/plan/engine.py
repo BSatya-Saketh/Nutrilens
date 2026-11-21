@@ -41,8 +41,13 @@ REPEATABLE_DISHES = {"tea", "filter_coffee", "milk", "fortified_milk"}  # may ap
 ACTIVITY_PAL = {
     "none": {"male": 1.26, "female": 1.30},
     "walking": {"male": 1.50, "female": 1.50},
+    "light": {"male": 1.50, "female": 1.50},
     "cycling": {"male": 1.62, "female": 1.66},
+    "moderate": {"male": 1.62, "female": 1.66},
+    "daily": {"male": 1.75, "female": 1.78},
     "running": {"male": 2.00, "female": 2.12},
+    "intense": {"male": 2.00, "female": 2.12},
+    "very_intense": {"male": 2.25, "female": 2.25},
 }
 
 def get_pal(activity: str, sex: str) -> float:

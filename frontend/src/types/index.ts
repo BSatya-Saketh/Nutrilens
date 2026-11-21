@@ -2,7 +2,7 @@ export type DietType = 'veg' | 'vegan' | 'eggetarian' | 'non_veg';
 
 export type MarkerStatus = 'low' | 'borderline' | 'normal' | 'high';
 
-export type Activity = 'none' | 'walking' | 'cycling' | 'running';
+export type Activity = 'none' | 'walking' | 'cycling' | 'running' | 'light' | 'moderate' | 'daily' | 'intense' | 'very_intense';
 
 export interface UserProfile {
   age: number;

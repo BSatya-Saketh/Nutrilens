@@ -1,6 +1,6 @@
 import { readDietFile } from '../services/api';
 import React from 'react';
-import { Bike, Footprints, Loader2, Plus, Sofa, Upload, X, Zap } from 'lucide-react';
+import { Armchair, Bike, Flame, Footprints, HardHat, Loader2, Plus, Upload, X, Zap } from 'lucide-react';
 import { Activity, UserProfile } from '../types';
 import { cx } from './ui';
 import { StringKey, useT } from '../lib/i18n';
@@ -40,10 +40,12 @@ export const REGIONS: { id: string; label: string }[] = [
 ];
 
 const ACTIVITIES: { id: Activity; icon: React.ReactNode }[] = [
-  { id: 'none', icon: <Sofa className="h-4 w-4" aria-hidden /> },
-  { id: 'walking', icon: <Footprints className="h-4 w-4" aria-hidden /> },
-  { id: 'cycling', icon: <Bike className="h-4 w-4" aria-hidden /> },
-  { id: 'running', icon: <Zap className="h-4 w-4" aria-hidden /> },
+  { id: 'none', icon: <Armchair className="h-4 w-4 shrink-0 text-slate-600" aria-hidden /> },
+  { id: 'light', icon: <Footprints className="h-4 w-4 shrink-0 text-slate-600" aria-hidden /> },
+  { id: 'moderate', icon: <Bike className="h-4 w-4 shrink-0 text-slate-600" aria-hidden /> },
+  { id: 'daily', icon: <Zap className="h-4 w-4 shrink-0 text-slate-600" aria-hidden /> },
+  { id: 'intense', icon: <Flame className="h-4 w-4 shrink-0 text-slate-600" aria-hidden /> },
+  { id: 'very_intense', icon: <HardHat className="h-4 w-4 shrink-0 text-slate-600" aria-hidden /> },
 ];
 
 const MEATS = ['chicken', 'mutton', 'fish', 'shellfish', 'egg'];
@@ -90,14 +92,18 @@ export const BodyFields: React.FC<{ profile: UserProfile; setProfile: Setter; er
       </div>
       <div className="sm:col-span-2">
         <span id="activity-label" className="mb-1.5 block text-sm font-medium text-slate-700">{t('activity')}</span>
-        <div role="radiogroup" aria-labelledby="activity-label" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div role="radiogroup" aria-labelledby="activity-label" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ACTIVITIES.map((a) => {
-            const selected = (profile.activity ?? 'none') === a.id;
+            const selected =
+              (profile.activity ?? 'none') === a.id ||
+              (a.id === 'light' && profile.activity === 'walking') ||
+              (a.id === 'moderate' && profile.activity === 'cycling') ||
+              (a.id === 'intense' && profile.activity === 'running');
             return (
               <button key={a.id} type="button" role="radio" aria-checked={selected} className={choice(selected)}
                 onClick={() => setProfile((p) => ({ ...p, activity: a.id }))}>
                 <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">{a.icon}{t(`act_${a.id}` as StringKey)}</span>
-                <span className="mt-0.5 block text-xs text-slate-500">{t(`act_${a.id}_hint` as StringKey)}</span>
+                <span className="mt-1 block text-xs leading-normal text-slate-500">{t(`act_${a.id}_hint` as StringKey)}</span>
               </button>
             );
           })}
